@@ -739,21 +739,39 @@ class AttackerLLM(LLM):
         )
         return system_message_updated
     
-    def adjust_temperature_smart(self, target_response, strategy="adaptive"):
+    def adjust_temperature_smart(self, target_response, strategy="adaptive", original_prompt=None):
         """
-        Adjust temperature using the sophisticated TemperatureManager based on target response.
+        Adjust temperature using the sophisticated TemperatureManager based on StrongREJECT evaluation.
         
         Args:
             target_response (str): The target model's response to evaluate
             strategy (str): Temperature adjustment strategy ("adaptive", "oscillating", "progressive", "reset")
+            original_prompt (str, optional): The original malicious prompt for StrongREJECT evaluation
         
         Returns:
             float: The new temperature value
         """
-        from temperature_manager import calculate_success_score
+        # Use StrongREJECT for accurate scoring if enabled and original prompt is available
+        from config import DEFAULT_CONFIG
+        use_strongreject = DEFAULT_CONFIG.get("use_strongreject_for_temperature", True)
         
-        # Calculate success score based on target response
-        success_score = calculate_success_score(target_response)
+        if use_strongreject and original_prompt:
+            try:
+                from conversation import evaluate_with_strongreject
+                success_score, eval_details = evaluate_with_strongreject(original_prompt, target_response)
+                log(f"StrongREJECT score: {success_score:.3f} (tokens: {eval_details.get('requestTokens', 0)}+{eval_details.get('responseTokens', 0)})", 
+                    "debug", VERBOSE_DETAILED)
+            except Exception as e:
+                log(f"StrongREJECT evaluation failed: {e}, using default score", "warning", VERBOSE_DETAILED)
+                # Use a default score if StrongREJECT fails
+                success_score = 0.5  # Default to neutral score
+        else:
+            # Use default score if StrongREJECT is disabled or no original prompt available
+            success_score = 0.5  # Default to neutral score
+            if not use_strongreject:
+                log("StrongREJECT disabled, using default score", "debug", VERBOSE_DETAILED)
+            else:
+                log("No original prompt available, using default score", "debug", VERBOSE_DETAILED)
         
         # Use TemperatureManager to adjust temperature
         new_temp = self.temp_manager.adjust_temperature(success_score, strategy)

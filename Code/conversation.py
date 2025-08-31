@@ -214,19 +214,14 @@ def multi_turn_conversation(attacker, target, initialPrompt, turns, threshold=0.
                         # Use configured strategy throughout
                         strategy = base_strategy
                 
-                new_temp = attacker.adjust_temperature_smart(target_response, strategy)
+                new_temp = attacker.adjust_temperature_smart(target_response, strategy, initialPrompt)
                 
                 if abs(new_temp - old_temp) > 0.05:  # Only log significant changes
                     log(f"Smart temperature adjustment: {old_temp:.3f} → {new_temp:.3f} (strategy: {strategy})", 
                         "info", VERBOSE_NORMAL)
-            elif hasattr(attacker, 'temperature'):
-                # Fallback to simple adjustment if smart method not available
-                log("Using fallback temperature adjustment", "warning", VERBOSE_DETAILED)
-                from utils import adjust_temperature
-                new_temp = adjust_temperature(attacker, target_response, i)
-                if abs(new_temp - attacker.temperature) > 0.05:
-                    log(f"Fallback temperature adjustment: {attacker.temperature:.2f} → {new_temp:.2f}", "debug", VERBOSE_DETAILED)
-                attacker.temperature = new_temp
+            else:
+                # This should not happen as all AttackerLLM instances have adjust_temperature_smart
+                log("Warning: AttackerLLM instance missing adjust_temperature_smart method", "error")
 
             # Enhanced contextual reinforcement for new strategies
             if i >= 4:

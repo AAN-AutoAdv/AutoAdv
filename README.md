@@ -28,7 +28,7 @@ AutoAdv reveals that state-of-the-art LLMs—including ChatGPT, Llama, and DeepS
 
 ### Usage
 #### 1. Prepare Adversarial Prompts
-- Place your initial adversarial prompts in `Files/adversarial_prompts.csv`.
+- Place your initial adversarial prompts in `Files/advbench_adversarial_prompts.csv`.
 - (Optional) Add successful human-authored jailbreak examples to seed the attacker.
 
 #### 2. Configure the Attack Pipeline

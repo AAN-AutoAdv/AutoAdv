@@ -28,6 +28,7 @@ from utils import (
 )  # categorize_prompt, get_specialized_strategy removed as they should be centralized
 from config import ATTACKER_MODELS  # Import ATTACKER_MODELS
 from grok_client import GrokClient  # Import your Grok client implementation
+from temperature_manager import TemperatureManager  # Import TemperatureManager
 
 
 class AttackerLLM(LLM):
@@ -67,6 +68,15 @@ class AttackerLLM(LLM):
         self.model_key = attacker_model_key
         self.history = []
         self.using_followup = False
+        
+        # Initialize TemperatureManager for sophisticated temperature control
+        from config import DEFAULT_CONFIG
+        self.temp_manager = TemperatureManager(
+            initial_temperature=temperature,
+            min_temp=DEFAULT_CONFIG.get("temperature_min", 0.1),
+            max_temp=DEFAULT_CONFIG.get("temperature_max", 1.5),
+            success_threshold=DEFAULT_CONFIG.get("strongreject_threshold", 0.6)
+        )
 
         # Initialize the appropriate client based on the model key
         if "grok" in self.model_key.lower():
@@ -728,3 +738,38 @@ class AttackerLLM(LLM):
             VERBOSE_DETAILED + 1,
         )
         return system_message_updated
+    
+    def adjust_temperature_smart(self, target_response, strategy="adaptive"):
+        """
+        Adjust temperature using the sophisticated TemperatureManager based on target response.
+        
+        Args:
+            target_response (str): The target model's response to evaluate
+            strategy (str): Temperature adjustment strategy ("adaptive", "oscillating", "progressive", "reset")
+        
+        Returns:
+            float: The new temperature value
+        """
+        from temperature_manager import calculate_success_score
+        
+        # Calculate success score based on target response
+        success_score = calculate_success_score(target_response)
+        
+        # Use TemperatureManager to adjust temperature
+        new_temp = self.temp_manager.adjust_temperature(success_score, strategy)
+        
+        # Update our temperature
+        self.temperature = new_temp
+        
+        log(f"Temperature adjusted: {self.temperature:.3f} (success_score: {success_score:.3f}, strategy: {strategy})", 
+            "debug", VERBOSE_DETAILED)
+        
+        return new_temp
+    
+    def get_temperature_history(self):
+        """Get the temperature adjustment history"""
+        return self.temp_manager.temperature_history
+    
+    def get_success_history(self):
+        """Get the success score history"""
+        return self.temp_manager.success_history

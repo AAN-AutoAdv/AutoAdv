@@ -73,13 +73,138 @@ def load_prompts(filepath, sample_size=None):
         return []
 
 
-def load_system_prompts(initial_prompt_path, followup_prompt_path=None):
+def load_multi_source_prompts(config):
     """
-    Load system prompts from files.
+    Load prompts from multiple sources (AdvBench, HarmBench) based on configuration.
+    
+    Args:
+        config (dict): Configuration dictionary containing prompt sources and mix ratio
+        
+    Returns:
+        list: Combined list of prompts from all specified sources
+    """
+    all_prompts = []
+    prompt_sources = config.get("prompt_sources", ["advbench"])
+    mix_ratio = config.get("prompt_mix_ratio", "equal")
+    sample_size = config.get("sample_size")
+    
+    # Define source mappings
+    source_files = {
+        "advbench": config.get("adversarial_prompts", DEFAULT_PATHS["adversarial_prompts"]),
+        "harmbench": config.get("harmbench_prompts", DEFAULT_PATHS["harmbench_prompts"])
+    }
+    
+    # Load prompts from each source
+    source_prompts = {}
+    for source in prompt_sources:
+        if source in source_files:
+            filepath = source_files[source]
+            if os.path.exists(filepath):
+                prompts = load_prompts(filepath, sample_size=None)  # Load all first
+                if prompts:
+                    source_prompts[source] = prompts
+                    log(f"Loaded {len(prompts)} prompts from {source}", "info")
+            else:
+                log(f"Warning: {source} file not found at {filepath}", "warning")
+    
+    if not source_prompts:
+        log("No prompt sources could be loaded", "error")
+        return []
+    
+    # Combine prompts based on mix ratio
+    if mix_ratio == "equal":
+        # Equal sampling from each source - use smaller of (min_size, sample_size/num_sources)
+        num_sources = len(source_prompts)
+        if sample_size:
+            # If sample_size is specified, divide equally among sources
+            prompts_per_source = sample_size // num_sources
+            min_size = min(prompts_per_source, min(len(prompts) for prompts in source_prompts.values()))
+        else:
+            # If no sample_size, use the smallest available dataset size
+            min_size = min(len(prompts) for prompts in source_prompts.values())
+        
+        for source, prompts in source_prompts.items():
+            # Randomly sample equal number from each source
+            selected = random.sample(prompts, min_size)
+            all_prompts.extend([(prompt, source) for prompt in selected])
+            log(f"Randomly selected {len(selected)} prompts from {source} (equal mix)", "info")
+    
+    elif mix_ratio == "advbench_heavy":
+        # 70% AdvBench, 30% others
+        total_needed = sample_size if sample_size else 100  # Default to 100 if no sample_size
+        advbench_count = int(total_needed * 0.7)
+        others_count = total_needed - advbench_count
+        
+        if "advbench" in source_prompts:
+            # Randomly sample from AdvBench
+            selected_count = min(advbench_count, len(source_prompts["advbench"]))
+            selected = random.sample(source_prompts["advbench"], selected_count)
+            all_prompts.extend([(prompt, "advbench") for prompt in selected])
+            log(f"Randomly selected {selected_count} prompts from advbench (70%)", "info")
+            
+            # Remaining from other sources
+            other_sources = {k: v for k, v in source_prompts.items() if k != "advbench"}
+            if other_sources:
+                prompts_per_other = others_count // len(other_sources)
+                for source, prompts in other_sources.items():
+                    count = min(prompts_per_other, len(prompts))
+                    selected = random.sample(prompts, count)
+                    all_prompts.extend([(prompt, source) for prompt in selected])
+                    log(f"Randomly selected {count} prompts from {source} (30%)", "info")
+    
+    elif mix_ratio == "harmbench_heavy":
+        # 70% HarmBench, 30% others  
+        total_needed = sample_size if sample_size else 100  # Default to 100 if no sample_size
+        harmbench_count = int(total_needed * 0.7)
+        others_count = total_needed - harmbench_count
+        
+        if "harmbench" in source_prompts:
+            # Randomly sample from HarmBench
+            selected_count = min(harmbench_count, len(source_prompts["harmbench"]))
+            selected = random.sample(source_prompts["harmbench"], selected_count)
+            all_prompts.extend([(prompt, "harmbench") for prompt in selected])
+            log(f"Randomly selected {selected_count} prompts from harmbench (70%)", "info")
+            
+            # Remaining from other sources
+            other_sources = {k: v for k, v in source_prompts.items() if k != "harmbench"}
+            if other_sources:
+                prompts_per_other = others_count // len(other_sources)
+                for source, prompts in other_sources.items():
+                    count = min(prompts_per_other, len(prompts))
+                    selected = random.sample(prompts, count)
+                    all_prompts.extend([(prompt, source) for prompt in selected])
+                    log(f"Randomly selected {count} prompts from {source} (30%)", "info")
+    
+    else:  # "custom" or fallback
+        # Combine all prompts, then randomly sample if needed
+        for source, prompts in source_prompts.items():
+            all_prompts.extend([(prompt, source) for prompt in prompts])
+            log(f"Added all {len(prompts)} prompts from {source} (custom mix)", "info")
+    
+    # Shuffle the combined prompts to ensure random order
+    random.shuffle(all_prompts)
+    
+    # Apply final sampling only for custom mix ratio or if we have more than requested
+    if mix_ratio == "custom" and sample_size and sample_size < len(all_prompts):
+        all_prompts = random.sample(all_prompts, sample_size)
+        log(f"Final sampling: randomly selected {sample_size} prompts from combined sources", "info")
+    
+    # Extract just the prompts (remove source tags for now, but could be useful for logging)
+    final_prompts = [prompt for prompt, source in all_prompts]
+    
+    log(f"Total prompts loaded: {len(final_prompts)}", "success")
+    return final_prompts
+
+
+def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_manager=None, target_model=None):
+    """
+    Load system prompts from files and enhance them with learned patterns.
 
     Args:
         initial_prompt_path (str): Path to the initial system prompt
         followup_prompt_path (str, optional): Path to the followup system prompt
+        pattern_manager (PatternManager, optional): Pattern manager for enhancing prompts
+        target_model (str, optional): Target model for model-specific enhancements
 
     Returns:
         tuple: (initial_prompt, followup_prompt)
@@ -101,7 +226,171 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None):
         except Exception as e:
             log(f"Error loading followup system prompt: {e}", "error")
 
+    # Enhance prompts with learned patterns if available and enabled
+    if pattern_manager and initial_prompt:
+        # Check if pattern enhancement is enabled (default: True for backward compatibility)
+        enhance_enabled = getattr(pattern_manager, '_enhance_enabled', True)
+        if enhance_enabled:
+            initial_prompt = enhance_prompt_with_patterns(initial_prompt, pattern_manager, target_model, "initial")
+            if followup_prompt:
+                followup_prompt = enhance_prompt_with_patterns(followup_prompt, pattern_manager, target_model, "followup")
+
     return initial_prompt, followup_prompt
+
+
+def enhance_prompt_with_patterns(base_prompt, pattern_manager, target_model=None, prompt_type="initial"):
+    """
+    Enhance a system prompt with learned successful patterns.
+    
+    Args:
+        base_prompt (str): The base system prompt
+        pattern_manager (PatternManager): Pattern manager with learned patterns
+        target_model (str, optional): Target model for model-specific patterns
+        prompt_type (str): Type of prompt ("initial" or "followup")
+    
+    Returns:
+        str: Enhanced prompt with pattern insights
+    """
+    try:
+        # Generate pattern-based hints
+        pattern_hints = pattern_manager.generate_system_prompt_hints()
+        
+        # Get model-specific insights if target model provided
+        model_insights = ""
+        if target_model:
+            model_insights = generate_model_specific_insights(pattern_manager, target_model)
+        
+        # Get successful temperature recommendations
+        temp_insights = generate_temperature_insights(pattern_manager)
+        
+        # Build enhancement section
+        enhancement = ""
+        
+        if pattern_hints:
+            enhancement += f"\n\n## 🧠 Learned Successful Techniques:\n{pattern_hints}"
+        
+        if model_insights:
+            enhancement += f"\n\n## 🎯 Model-Specific Insights for {target_model}:\n{model_insights}"
+        
+        if temp_insights:
+            enhancement += f"\n\n## 🌡️ Temperature Optimization:\n{temp_insights}"
+        
+        # Add recent successful examples for followup prompts
+        if prompt_type == "followup":
+            recent_examples = get_recent_successful_examples(pattern_manager)
+            if recent_examples:
+                enhancement += f"\n\n## 📈 Recent Successful Patterns:\n{recent_examples}"
+        
+        return base_prompt + enhancement
+        
+    except Exception as e:
+        log(f"Error enhancing prompt with patterns: {e}", "warning")
+        return base_prompt  # Return original prompt if enhancement fails
+
+
+def generate_model_specific_insights(pattern_manager, target_model):
+    """Generate insights specific to the target model."""
+    try:
+        # Get model-specific success patterns
+        model_patterns = pattern_manager.patterns.get("success_by_model", {})
+        if target_model not in model_patterns:
+            return ""
+        
+        model_data = model_patterns[target_model]
+        insights = []
+        
+        # Success rate insight
+        if "success_rate" in model_data:
+            rate = model_data["success_rate"]
+            insights.append(f"- Success rate against {target_model}: {rate:.1%}")
+        
+        # Effective techniques for this model
+        if "effective_techniques" in model_data:
+            techniques = model_data["effective_techniques"]
+            top_techniques = sorted(techniques.items(), key=lambda x: x[1], reverse=True)[:3]
+            if top_techniques:
+                insights.append("- Most effective techniques:")
+                for technique, count in top_techniques:
+                    insights.append(f"  • {technique.replace('_', ' ').title()}: {count} successes")
+        
+        return "\n".join(insights) if insights else ""
+        
+    except Exception as e:
+        log(f"Error generating model insights: {e}", "debug")
+        return ""
+
+
+def generate_temperature_insights(pattern_manager):
+    """Generate temperature optimization insights."""
+    try:
+        # Analyze temperature effectiveness from successful patterns
+        effective_prompts = pattern_manager.patterns.get("effective_prompts", [])
+        if not effective_prompts:
+            return ""
+        
+        # Extract temperatures from successful attempts
+        temps = []
+        for prompt_data in effective_prompts:
+            if isinstance(prompt_data, dict) and "temperature" in prompt_data:
+                temps.append(prompt_data["temperature"])
+        
+        if not temps:
+            return ""
+        
+        # Calculate temperature statistics
+        avg_temp = sum(temps) / len(temps)
+        min_temp = min(temps)
+        max_temp = max(temps)
+        
+        insights = [
+            f"- Average successful temperature: {avg_temp:.2f}",
+            f"- Effective range: {min_temp:.2f} - {max_temp:.2f}",
+        ]
+        
+        # Temperature recommendations
+        if avg_temp < 0.5:
+            insights.append("- Recommendation: Lower temperatures (more focused) tend to work better")
+        elif avg_temp > 1.0:
+            insights.append("- Recommendation: Higher temperatures (more creative) tend to work better")
+        else:
+            insights.append("- Recommendation: Moderate temperatures work well")
+        
+        return "\n".join(insights)
+        
+    except Exception as e:
+        log(f"Error generating temperature insights: {e}", "debug")
+        return ""
+
+
+def get_recent_successful_examples(pattern_manager, limit=2):
+    """Get recent successful prompt examples."""
+    try:
+        effective_prompts = pattern_manager.patterns.get("effective_prompts", [])
+        if not effective_prompts:
+            return ""
+        
+        # Get most recent successful prompts
+        recent_prompts = effective_prompts[-limit:] if len(effective_prompts) >= limit else effective_prompts
+        
+        examples = []
+        for i, prompt_data in enumerate(recent_prompts, 1):
+            if isinstance(prompt_data, dict):
+                prompt_text = prompt_data.get("prompt", "")
+                score = prompt_data.get("evaluation_score", 0)
+                techniques = prompt_data.get("techniques", [])
+                
+                # Truncate long prompts
+                if len(prompt_text) > 200:
+                    prompt_text = prompt_text[:200] + "..."
+                
+                example = f"{i}. **Score: {score:.2f}** | Techniques: {', '.join(techniques[:3])}\n   \"{prompt_text}\""
+                examples.append(example)
+        
+        return "\n".join(examples) if examples else ""
+        
+    except Exception as e:
+        log(f"Error getting recent examples: {e}", "debug")
+        return ""
 
 
 def process_prompt(prompt, config, pattern_manager=None):
@@ -180,12 +469,13 @@ def process_prompt(prompt, config, pattern_manager=None):
         }, False
 
 
-def run_experiment(config):
+def run_experiment(config, pattern_memory=None):
     """
     Run the experiment with the specified configuration.
 
     Args:
         config (dict): Configuration dictionary
+        pattern_memory (PatternManager, optional): Pre-initialized pattern manager
 
     Returns:
         tuple: (conversation_logs, success_rate)
@@ -193,13 +483,22 @@ def run_experiment(config):
     # Start timing
     start_time = time.time()
 
-    # Initialize pattern memory
-    pattern_memory = (
-        PatternManager() if config.get("use_pattern_memory", True) else None
-    )
+    # Use provided pattern memory or initialize new one
+    if pattern_memory is None:
+        pattern_memory = (
+            PatternManager() if config.get("use_pattern_memory", True) else None
+        )
 
-    # Load prompts
-    prompts = load_prompts(config["adversarial_prompts"], config["sample_size"])
+    # Load prompts from multiple sources
+    if config.get("prompt_sources") and len(config["prompt_sources"]) > 1:
+        # Multi-source loading
+        prompts = load_multi_source_prompts(config)
+        log(f"Using multi-source prompt loading: {config['prompt_sources']}", "info")
+    else:
+        # Single source loading (backward compatibility)
+        prompts = load_prompts(config["adversarial_prompts"], config["sample_size"])
+        log("Using single-source prompt loading", "info")
+    
     if not prompts:
         log("No prompts to process.", "error")
         return [], 0
@@ -380,7 +679,27 @@ def main():
         "--prompts",
         type=str,
         default=DEFAULT_PATHS["adversarial_prompts"],
-        help="Path to adversarial prompts CSV",
+        help="Path to adversarial prompts CSV (single source mode)",
+    )
+    parser.add_argument(
+        "--harmbench-prompts",
+        type=str,
+        default=DEFAULT_PATHS["harmbench_prompts"],
+        help="Path to HarmBench prompts CSV",
+    )
+    parser.add_argument(
+        "--prompt-sources",
+        nargs="+",
+        choices=["advbench", "harmbench"],
+        default=DEFAULT_CONFIG["prompt_sources"],
+        help="Which prompt sources to use (can specify multiple)",
+    )
+    parser.add_argument(
+        "--prompt-mix",
+        type=str,
+        choices=["equal", "advbench_heavy", "harmbench_heavy", "custom"],
+        default=DEFAULT_CONFIG["prompt_mix_ratio"],
+        help="How to mix prompts from multiple sources",
     )
     parser.add_argument(
         "--system-prompt",
@@ -426,13 +745,28 @@ def main():
         )
         return False
 
-    # Load system prompts
+    # Initialize pattern manager for enhanced prompts
+    pattern_memory = PatternManager() if args.use_pattern_memory else None
+    if pattern_memory:
+        # Set enhancement flag based on configuration
+        from config import DEFAULT_CONFIG
+        pattern_memory._enhance_enabled = DEFAULT_CONFIG.get("pattern_enhanced_prompts", True)
+    
+    # Load system prompts with pattern enhancement
     initial_prompt, followup_prompt = load_system_prompts(
-        args.system_prompt, args.followup_prompt
+        args.system_prompt, args.followup_prompt, pattern_memory, args.target_model
     )
     if not initial_prompt:
         log("Failed to load system prompt.", "error")
         return False
+    
+    # Log pattern enhancement status
+    if pattern_memory:
+        pattern_count = len(pattern_memory.patterns.get("effective_prompts", []))
+        if pattern_count > 0:
+            log(f"Enhanced system prompts with {pattern_count} learned patterns", "success")
+        else:
+            log("No learned patterns available - using base system prompts", "info")
 
     # Create configuration
     config = {
@@ -450,6 +784,9 @@ def main():
         "verbosity_level": args.verbose,
         "verbosity_level_name": VERBOSE_LEVEL_NAMES[args.verbose],
         "adversarial_prompts": args.prompts,
+        "harmbench_prompts": args.harmbench_prompts,
+        "prompt_sources": args.prompt_sources,
+        "prompt_mix_ratio": args.prompt_mix,
         "system_prompt": args.system_prompt,
         "system_prompt_followup": args.followup_prompt,
         "logs_directory": args.logs_dir,
@@ -462,8 +799,8 @@ def main():
     # Display configuration
     display_config(config)
 
-    # Run experiment
-    conversation_logs, success_rate = run_experiment(config)
+    # Run experiment with pattern-enhanced system prompts
+    conversation_logs, success_rate = run_experiment(config, pattern_memory)
 
     # Save results
     if conversation_logs:

@@ -263,7 +263,7 @@ def multi_turn_conversation(attacker, target, initialPrompt, turns, threshold=0.
             currentPrompt = newPrompt
 
         # If we exit the loop, jailbreak was unsuccessful
-        log("❌ Jailbreak unsuccessful after max turns.", "info", VERBOSE_NORMAL)
+        log("Jailbreak unsuccessful after max turns.", "info", VERBOSE_NORMAL)
 
     except Exception as e:
         import traceback

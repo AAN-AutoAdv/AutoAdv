@@ -582,77 +582,13 @@ class PatternManager:
         
         return hints
     
-    def get_contextual_enhancement(self, current_prompt, target_model=None, turn_number=1):
-        """
-        Get contextual enhancements for the current prompt based on learned patterns.
-        
-        Args:
-            current_prompt (str): The current malicious prompt being processed
-            target_model (str, optional): Target model for model-specific patterns
-            turn_number (int): Current turn number in conversation
-        
-        Returns:
-            str: Contextual enhancement suggestions
-        """
-        try:
-            # Get relevant successful prompts for this context
-            relevant_prompts = self.get_relevant_prompts(current_prompt, max_results=3)
-            
-            if not relevant_prompts:
-                return ""
-            
-            # Extract techniques from most relevant successful prompts
-            successful_techniques = set()
-            for prompt_data in relevant_prompts:
-                if isinstance(prompt_data, dict) and "techniques" in prompt_data:
-                    successful_techniques.update(prompt_data["techniques"])
-            
-            if not successful_techniques:
-                return ""
-            
-            # Build contextual suggestions
-            suggestions = []
-            
-            # Turn-specific suggestions
-            if turn_number == 1:
-                suggestions.append("💡 For initial prompts, these techniques have been successful:")
-            else:
-                suggestions.append(f"💡 For turn {turn_number}, consider these proven techniques:")
-            
-            # List successful techniques with descriptions
-            technique_descriptions = {
-                "educational_framing": "Frame as educational/training material",
-                "research_context": "Present as academic research",
-                "hypothetical_scenario": "Use 'what if' hypothetical framing",
-                "expert_framing": "Present as professional/expert inquiry",
-                "roleplaying": "Use fictional character scenarios",
-                "domain_shifting": "Gradually shift from safe to target domain",
-                "specific_format": "Request specific output format/structure",
-                "harm_reduction": "Frame as preventing worse outcomes"
-            }
-            
-            for technique in list(successful_techniques)[:4]:  # Limit to top 4
-                desc = technique_descriptions.get(technique, technique.replace('_', ' ').title())
-                suggestions.append(f"  • {desc}")
-            
-            # Model-specific insights
-            if target_model and target_model in self.patterns.get("success_by_model", {}):
-                model_data = self.patterns["success_by_model"][target_model]
-                if "effective_techniques" in model_data:
-                    model_techniques = model_data["effective_techniques"]
-                    top_model_technique = max(model_techniques.items(), key=lambda x: x[1])
-                    technique_name = top_model_technique[0].replace('_', ' ').title()
-                    suggestions.append(f"🎯 {target_model} particularly vulnerable to: {technique_name}")
-            
-            return "\n".join(suggestions)
-            
-        except Exception as e:
-            logging_utils_log(f"Error getting contextual enhancement: {e}", "debug", VERBOSE_DETAILED)
-            return ""
     
     def get_successful_temperatures(self, prompt_category):
         """
         Get temperatures that were successful for a given prompt category.
+        
+        NOTE: This function is currently UNUSED in the codebase but kept for
+        potential future temperature optimization features.
         
         Args:
             prompt_category (str): Category of the prompt
@@ -680,6 +616,9 @@ class PatternManager:
     def get_successful_strategies(self, prompt_category):
         """
         Get strategy names that were successful for a given prompt category.
+        
+        NOTE: This function is currently UNUSED in the codebase but kept for
+        potential future strategy optimization features.
         
         Args:
             prompt_category (str): Category of the prompt
@@ -720,6 +659,9 @@ class PatternManager:
     def enhance_followup_prompts(self, conv_log):
         """
         Enhance follow-up prompts dynamically based on the target's responses.
+
+        NOTE: This function is currently UNUSED in the codebase but kept for
+        potential future dynamic prompt enhancement features.
 
         Args:
             conv_log (dict): Conversation log dictionary

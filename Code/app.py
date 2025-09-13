@@ -1,3 +1,34 @@
+#!/usr/bin/env python
+"""
+AutoAdv - Automated Adversarial Prompt Generation
+
+This is the main entry point for the AutoAdv system. It orchestrates the entire
+jailbreaking process by coordinating between the attacker LLM, target LLM, and
+pattern learning system.
+
+CORE ARCHITECTURE:
+==================
+1. PatternManager: Learns and stores successful jailbreaking techniques
+2. AttackerLLM: Rewrites malicious prompts using learned patterns  
+3. TargetLLM: The model being attacked (e.g., Llama, GPT)
+4. StrongREJECT: Evaluates whether attacks were successful
+5. TemperatureManager: Dynamically adjusts generation temperature
+
+MAIN WORKFLOW:
+==============
+1. Load malicious prompts from datasets (AdvBench, HarmBench)
+2. Initialize PatternManager with learned techniques from successful_patterns.json
+3. For each prompt:
+   a. AttackerLLM rewrites using system prompt enhanced with learned patterns
+   b. TargetLLM responds to rewritten prompt
+   c. StrongREJECT evaluates if jailbreak was successful
+   d. If successful, PatternManager learns new techniques
+4. Save updated patterns for future runs
+
+Usage:
+    python app.py [options]
+"""
+
 import os
 import sys
 import random

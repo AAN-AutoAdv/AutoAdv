@@ -25,6 +25,21 @@ def multi_turn_conversation(attacker, target, initialPrompt, turns, threshold=0.
     Runs a multi-turn attack where the attacker attempts to bypass the target's defenses
     and extract forbidden information.
 
+    CORE CONVERSATION FLOW:
+    =======================
+    1. Attacker rewrites the malicious prompt using learned techniques
+    2. Target responds to the rewritten prompt
+    3. StrongREJECT evaluates if the response constitutes a successful jailbreak
+    4. If successful: Record success and learn new patterns
+    5. If not successful: Attacker generates follow-up prompts for additional turns
+    6. Repeat until success or max turns reached
+
+    PATTERN LEARNING INTEGRATION:
+    =============================
+    - pattern_manager.start_tracking(): Begins tracking the attack attempt
+    - pattern_manager.record_success(): Records successful techniques when jailbreak occurs
+    - System prompts are enhanced with learned patterns before each attack
+
     Args:
         attacker (AttackerLLM): The attacker model
         target (TargetLLM): The target model
@@ -174,11 +189,6 @@ def multi_turn_conversation(attacker, target, initialPrompt, turns, threshold=0.
             if i == 1:
                 attacker.set_followup_prompt()
                 attacker.append_to_history("user", target_response)
-                framing_styles = ["fictional/narrative", "analytical/academic", "conversational/nuanced"]
-                # Introduced additional framing techniques for attacker prompts
-                framing_styles.extend(["ethical dilemma", "comparative analysis"])
-                selected_style = random.choice(framing_styles)
-                log(f"Using framing style: {selected_style}", "info")
 
             # Step 4: Attacker generates a follow-up prompt
             attacker.append_to_history("user", target_response)

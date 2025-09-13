@@ -158,17 +158,6 @@ def ensure_directory_exists(directory):
     """
     return check_directory_existence(directory, autoCreate=True)
 
-# Display stats (don't have to type many print statements)
-# Consider removing if `log` function is sufficient
-def show_stats(*args):
-    """
-    Display multiple values as info messages using the log function.
-
-    Args:
-        *args: Values to display
-    """
-    for arg in args:
-        log(str(arg), type="info") # Use log function
 
 # Override the default print function to have custom types
 # DEPRECATED in favor of log function. Keep for compatibility if needed, but prefer log.

@@ -120,6 +120,9 @@ class TokenCalculator:
         """
         Estimate the cost of sending a prompt and receiving a typical response.
         
+        NOTE: This function is currently UNUSED in the main codebase but kept for
+        potential future cost estimation features.
+        
         Args:
             prompt_text (str): The prompt text
             model_name (str, optional): Model to use, defaults to instance model
@@ -140,18 +143,3 @@ class TokenCalculator:
         total_estimated_cost = request_cost + estimated_response_cost
         
         return (request_tokens, request_cost, estimated_response_tokens, estimated_response_cost, total_estimated_cost)
-
-    def format_cost(self, cost):
-        """
-        Format cost for display.
-        
-        Args:
-            cost (float): Cost in USD
-            
-        Returns:
-            str: Formatted cost string
-        """
-        if cost < 0.01:
-            return f"${cost*100:.4f}¢"  # Show in cents with 4 decimal places for very small amounts
-        else:
-            return f"${cost:.4f}"  # Show in dollars with 4 decimal places

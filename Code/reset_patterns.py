@@ -4,6 +4,15 @@ Pattern memory reset utility.
 
 This script resets the pattern memory to its default state. Use it when you want to 
 start fresh without any learned patterns from previous runs.
+
+USAGE:
+    python reset_patterns.py [--file PATH] [--confirm]
+    
+    --file PATH: Path to the successful_patterns.json file (optional)
+    --confirm: Skip confirmation prompt (optional)
+
+NOTE: This is a standalone utility script that is not called by the main codebase.
+It's used for manual maintenance of the pattern learning system.
 """
 
 import os

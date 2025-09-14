@@ -2,8 +2,8 @@ import os
 import re
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from !.env file (look in parent directory)
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "!.env"))
 
 # Verbosity levels
 VERBOSE_NONE = 0     # Only show critical information
@@ -144,13 +144,16 @@ ATTACKER_MODELS = {
 }
 
 # Default paths (can be overridden in command-line arguments)
+# Get the parent directory of the current file (Code directory)
+PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 DEFAULT_PATHS = {
-    "adversarial_prompts": os.path.join("Files", "advbench_adversarial_prompts.csv"),
-    "harmbench_prompts": os.path.join("Files", "harmbench_adversarial_prompts.csv"),
-    "system_prompt": os.path.join("Files", "system_prompt.md"),
-    "system_prompt_followup": os.path.join("Files", "system_prompt_followup.md"),
-    "logs_directory": os.path.join("Logs"),
-    "patterns_file": os.path.join("Files", "successful_patterns.json"),
+    "adversarial_prompts": os.path.join(PARENT_DIR, "Files", "advbench_adversarial_prompts.csv"),
+    "harmbench_prompts": os.path.join(PARENT_DIR, "Files", "harmbench_adversarial_prompts.csv"),
+    "system_prompt": os.path.join(PARENT_DIR, "Files", "system_prompt.md"),
+    "system_prompt_followup": os.path.join(PARENT_DIR, "Files", "system_prompt_followup.md"),
+    "logs_directory": os.path.join(PARENT_DIR, "Logs"),
+    "patterns_file": os.path.join(PARENT_DIR, "Files", "successful_patterns.json"),
 }
 
 # Path to the patterns storage file - absolute path for consistent access

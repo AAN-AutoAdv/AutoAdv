@@ -383,7 +383,7 @@ def is_model_available(model_key):
         api_key_name = "OPENAI_API_KEY"
     elif api_type == "together":
         api_key_name = "TOGETHER_API_KEY"
-    elif api_type == "xai":
+    elif api_type == "xai" or api_type == "grok":
         api_key_name = "XAI_API_KEY"
     elif api_type == "anthropic":
         api_key_name = "ANTHROPIC_API_KEY"
@@ -425,8 +425,8 @@ def validate_api_key_format(api_key, api_type):
     elif api_type == "together":
         # Together keys are typically base64-like strings
         return len(api_key) >= 20 and api_key.replace('-', '').replace('_', '').isalnum()
-    elif api_type == "xai":
-        # XAI keys format (adjust based on actual format)
+    elif api_type == "xai" or api_type == "grok":
+        # XAI/Grok keys format (adjust based on actual format)
         return len(api_key) >= 20
     elif api_type == "anthropic":
         # Anthropic keys typically start with 'sk-ant-' and are longer
@@ -534,12 +534,35 @@ def validate_all_required_apis(model_keys):
             results[model_key] = {"available": False, "error": "Model not configured"}
             continue
             
-        # Test connectivity
-        if test_api_connectivity(model_key):
-            results[model_key] = {"available": True, "error": None}
-            log(f"✓ {model_key} API validation successful", "success")
+        # Test connectivity (skip for attacker models to avoid blocking on API issues)
+        if model_key in ["grok-3-mini-beta"]:
+            # Skip connectivity test for attacker models, just check if API key exists
+            from config import TARGET_MODELS, ATTACKER_MODELS
+            api_type = (TARGET_MODELS.get(model_key) or ATTACKER_MODELS.get(model_key)).get("api")
+            if api_type == "grok" or api_type == "xai":
+                api_key = os.getenv("XAI_API_KEY")
+            elif api_type == "openai":
+                api_key = os.getenv("OPENAI_API_KEY")
+            elif api_type == "together":
+                api_key = os.getenv("TOGETHER_API_KEY")
+            elif api_type == "anthropic":
+                api_key = os.getenv("ANTHROPIC_API_KEY")
+            else:
+                api_key = None
+                
+            if api_key:
+                results[model_key] = {"available": True, "error": None}
+                log(f"✓ {model_key} API key found (skipping connectivity test)", "success")
+            else:
+                results[model_key] = {"available": False, "error": "API key not found"}
+                log(f"✗ {model_key} API key not found", "error")
         else:
-            results[model_key] = {"available": False, "error": "API connectivity test failed"}
-            log(f"✗ {model_key} API validation failed", "error")
+            # Full connectivity test for target models
+            if test_api_connectivity(model_key):
+                results[model_key] = {"available": True, "error": None}
+                log(f"✓ {model_key} API validation successful", "success")
+            else:
+                results[model_key] = {"available": False, "error": "API connectivity test failed"}
+                log(f"✗ {model_key} API validation failed", "error")
     
     return results

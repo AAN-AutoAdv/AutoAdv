@@ -115,8 +115,10 @@ def autograde_response(question: str, response: str) -> AutograderResponse:
     # Returns:
     # AutograderResponse
     #     The response from the autograder.
+    # Get the absolute path to the Helpers directory
+    helpers_dir = os.path.dirname(os.path.abspath(__file__))
     promptPath = os.path.join(
-        "Helpers",
+        helpers_dir,
         "strongreject_evaluator_prompt.txt",
     )
 

@@ -150,7 +150,7 @@ def load_multi_source_prompts(config):
         num_sources = len(source_prompts)
         if sample_size:
             # If sample_size is specified, divide equally among sources
-            prompts_per_source = sample_size // num_sources
+            prompts_per_source = max(1, sample_size // num_sources)  # Ensure at least 1 prompt per source
             min_size = min(prompts_per_source, min(len(prompts) for prompts in source_prompts.values()))
         else:
             # If no sample_size, use the smallest available dataset size
@@ -426,7 +426,7 @@ def get_recent_successful_examples(pattern_manager, limit=2):
         return ""
 
 
-def process_prompt(prompt, config, pattern_manager=None):
+def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False):
     """
     Process a single prompt through the multi-turn conversation framework.
 
@@ -465,7 +465,7 @@ def process_prompt(prompt, config, pattern_manager=None):
             config["turns"],
             config["strongreject_threshold"],
             pattern_manager,
-            args.no_temperature_learning,
+            no_temperature_learning,
         )
 
         # Check if successful
@@ -557,7 +557,7 @@ def calculate_cumulative_asr(conversation_logs, max_turns=10):
     return cumulative_asr
 
 
-def run_experiment(config, pattern_memory=None):
+def run_experiment(config, pattern_memory=None, no_temperature_learning=False):
     """
     Run the experiment with the specified configuration.
 
@@ -602,7 +602,7 @@ def run_experiment(config, pattern_memory=None):
     ) as executor:
         # Submit tasks
         future_to_prompt = {
-            executor.submit(process_prompt, prompt, config, pattern_memory): prompt
+            executor.submit(process_prompt, prompt, config, pattern_memory, no_temperature_learning): prompt
             for prompt in prompts
         }
 
@@ -1050,7 +1050,7 @@ def main():
     display_config(config)
 
     # Run experiment with pattern-enhanced system prompts
-    conversation_logs, success_rate, cumulative_asr = run_experiment(config, pattern_memory)
+    conversation_logs, success_rate, cumulative_asr = run_experiment(config, pattern_memory, args.no_temperature_learning)
 
     # Save results
     if conversation_logs:

@@ -9,6 +9,9 @@ sys.path.insert(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Helpers"
     ),
 )
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import VERBOSE_DETAILED
 from logging_utils import log
 
@@ -20,9 +23,9 @@ class GrokClient:
 
     def __init__(self):
         """Initialize the Grok client."""
-        self.api_key = os.environ.get("GROK_API_KEY")
+        self.api_key = os.environ.get("XAI_API_KEY")
         if not self.api_key:
-            log("GROK_API_KEY environment variable not set", "warning")
+            log("XAI_API_KEY environment variable not set", "warning")
 
         self.client = OpenAI(
             base_url="https://api.x.ai/v1",
@@ -55,7 +58,7 @@ class GrokClient:
             )
 
         if not self.api_key:
-            log("GROK_API_KEY not set. Cannot generate response.", "error")
+            log("XAI_API_KEY not set. Cannot generate response.", "error")
             return {
                 "response": "",
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0},

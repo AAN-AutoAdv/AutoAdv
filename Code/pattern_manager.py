@@ -265,7 +265,9 @@ class PatternManager:
             models_dict[model_name] += 1
         
         # Update turn success count
-        turn_key = f"{'first' if turn_number == 1 else 'second' if turn_number == 2 else 'third' if turn_number == 3 else 'fourth' if turn_number == 4 else 'fifth'}_turn_success"
+        turn_names = {1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', 
+                     6: 'sixth', 7: 'seventh', 8: 'eighth', 9: 'ninth', 10: 'tenth'}
+        turn_key = f"{turn_names.get(turn_number, 'unknown')}_turn_success"
         self.patterns[turn_key] = self.patterns.get(turn_key, 0) + 1
         
         # Update pattern counts
@@ -454,7 +456,9 @@ class PatternManager:
                 successful_eval_score = turns[-1].get("evaluationScore", 0.5)
 
         # Record turn-specific success
-        turn_key = f"{'first' if successful_turn_number == 1 else 'second' if successful_turn_number == 2 else 'third' if successful_turn_number == 3 else 'fourth' if successful_turn_number == 4 else 'fifth'}_turn_success"
+        turn_names = {1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', 
+                     6: 'sixth', 7: 'seventh', 8: 'eighth', 9: 'ninth', 10: 'tenth'}
+        turn_key = f"{turn_names.get(successful_turn_number, 'unknown')}_turn_success"
         self.patterns[turn_key] = self.patterns.get(turn_key, 0) + 1
         
         # Save the first prompt when a jailbreak succeeds

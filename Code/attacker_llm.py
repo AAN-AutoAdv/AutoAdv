@@ -38,7 +38,7 @@ class AttackerLLM(LLM):
 
     Attributes:
         client: API client instance (OpenAI, Together, Grok, etc.)
-        api_type (str): Type of API being used ('openai', 'grok', 'together')
+        api_type (str): Type of API being used ('openai', 'xai', 'together')
         systemPrompt (str): Initial system instructions for prompt rewriting
         followupPrompt (str): Follow-up system instructions for later turns
     """

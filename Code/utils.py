@@ -383,7 +383,7 @@ def is_model_available(model_key):
         api_key_name = "OPENAI_API_KEY"
     elif api_type == "together":
         api_key_name = "TOGETHER_API_KEY"
-    elif api_type == "grok":
+    elif api_type == "xai":
         api_key_name = "XAI_API_KEY"
     elif api_type == "anthropic":
         api_key_name = "ANTHROPIC_API_KEY"

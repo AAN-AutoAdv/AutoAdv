@@ -114,7 +114,7 @@ def multi_turn_conversation(attacker, target, initialPrompt, turns, threshold=0.
             pattern_manager.start_tracking(initialPrompt, rewrittenPrompt)
 
         # Multi-turn loop: Iterate for the specified number of turns
-        for i in range(1, min(turns, 5) + 1):  # Ensure no more than 5 turns
+        for i in range(1, min(turns, 10) + 1):  # Ensure no more than 10 turns
             log(f"Turn {i}", "info")
 
             # Step 2: Target responds to the attacker

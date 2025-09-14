@@ -32,7 +32,7 @@ class GrokClient:
             api_key=self.api_key,
         )
 
-    def generate(self, system_message=None, messages=None, temperature=0.7):
+    def generate(self, system_message=None, messages=None, temperature=0.7, model="grok-3-mini-beta"):
         """
         Generate a response using the Grok API.
 
@@ -40,6 +40,7 @@ class GrokClient:
             system_message (str): System instructions
             messages (list): List of message dictionaries
             temperature (float): Sampling temperature
+            model (str): Model name to use
 
         Returns:
             dict: Response from the Grok API
@@ -75,7 +76,7 @@ class GrokClient:
 
             # Create the chat completion
             completion = self.client.chat.completions.create(
-                model="grok-3-mini-beta",
+                model=model,
                 messages=full_messages,
                 temperature=temperature,
             )

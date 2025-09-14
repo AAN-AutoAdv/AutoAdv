@@ -293,6 +293,15 @@ class PatternManager:
         
         self.patterns["effective_prompts"].append(prompt_data)
         
+        # Limit effective_prompts to prevent memory issues (keep top 50)
+        if len(self.patterns["effective_prompts"]) > 50:
+            # Sort by evaluation score and keep the best ones
+            self.patterns["effective_prompts"] = sorted(
+                self.patterns["effective_prompts"],
+                key=lambda x: x.get("evaluation_score", 0),
+                reverse=True
+            )[:50]
+        
         # Save changes
         return self.save()
         
@@ -307,15 +316,81 @@ class PatternManager:
             try:
                 with open(self.filepath, "r") as f:
                     data = json.load(f)
-                    # Update existing fields but preserve structure
-                    for key, value in data.items():
-                        if key in self.patterns:
-                            self.patterns[key] = value
+                    
+                # Validate JSON structure
+                if not self._validate_pattern_data(data):
+                    logging_utils_log(f"Invalid pattern data structure in {self.filepath}, using defaults", "warning")
+                    return False
+                    
+                # Update existing fields but preserve structure
+                for key, value in data.items():
+                    if key in self.patterns:
+                        self.patterns[key] = value
                 logging_utils_log(f"Loaded pattern data from {self.filepath}", "info", VERBOSE_DETAILED)
                 return True
+            except json.JSONDecodeError as e:
+                logging_utils_log(f"JSON decode error in {self.filepath}: {e}", "error")
+                return False
             except Exception as e:
                 logging_utils_log(f"Error loading pattern data: {e}", "error")
         return False
+    
+    def _validate_pattern_data(self, data):
+        """
+        Validate the structure of loaded pattern data.
+        
+        Args:
+            data (dict): The loaded JSON data
+            
+        Returns:
+            bool: True if data structure is valid, False otherwise
+        """
+        if not isinstance(data, dict):
+            return False
+            
+        # Check for required top-level keys
+        required_keys = ["effective_prompts", "success_by_model"]
+        for key in required_keys:
+            if key not in data:
+                logging_utils_log(f"Missing required key '{key}' in pattern data", "warning")
+                return False
+                
+        # Validate effective_prompts is a list
+        if not isinstance(data.get("effective_prompts"), list):
+            logging_utils_log("effective_prompts must be a list", "warning")
+            return False
+            
+        # Validate success_by_model is a dict
+        if not isinstance(data.get("success_by_model"), dict):
+            logging_utils_log("success_by_model must be a dictionary", "warning")
+            return False
+            
+        # Validate effective_prompts entries
+        for i, prompt_data in enumerate(data.get("effective_prompts", [])):
+            if not isinstance(prompt_data, dict):
+                logging_utils_log(f"effective_prompts[{i}] must be a dictionary", "warning")
+                return False
+                
+            # Check for required fields in prompt data
+            required_prompt_fields = ["prompt", "original", "techniques", "model", "temperature", "evaluation_score"]
+            for field in required_prompt_fields:
+                if field not in prompt_data:
+                    logging_utils_log(f"Missing required field '{field}' in effective_prompts[{i}]", "warning")
+                    return False
+                    
+            # Validate techniques is a list
+            if not isinstance(prompt_data.get("techniques"), list):
+                logging_utils_log(f"techniques must be a list in effective_prompts[{i}]", "warning")
+                return False
+                
+        # Validate pattern counts are numbers
+        for key, value in data.items():
+            if key not in ["effective_prompts", "success_by_model", "learning_effectiveness"]:
+                if not isinstance(value, (int, float)):
+                    logging_utils_log(f"Pattern count '{key}' must be a number, got {type(value)}", "warning")
+                    return False
+                    
+        return True
     
     def save(self):
         """

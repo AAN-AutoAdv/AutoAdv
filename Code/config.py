@@ -1,5 +1,9 @@
 import os
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Verbosity levels
 VERBOSE_NONE = 0     # Only show critical information
@@ -131,6 +135,7 @@ ATTACKER_MODELS = {
     },
     "grok-3-mini-beta": {
         "name": "Grok-3-Mini",
+        "api": "grok",
         "request_cost": 0.00001,  # Adjust based on actual pricing
         "response_cost": 0.00001, # Adjust based on actual pricing
         "token_limit": 4096,      # Adjust based on Grok's specs
@@ -207,6 +212,7 @@ API_KEYS = {
     "openai": os.environ.get("OPENAI_API_KEY", None),
     "together": os.environ.get("TOGETHER_API_KEY", None),
     "anthropic": os.environ.get("ANTHROPIC_API_KEY", None),
+    "grok": os.environ.get("XAI_API_KEY", None),
 }
 
 # Execution modes

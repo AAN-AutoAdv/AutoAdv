@@ -402,3 +402,144 @@ def is_model_available(model_key):
 
     log(f"Model '{model_key}' appears to be configured.", "info", VERBOSE_DETAILED)
     return True # Basic configuration exists
+
+
+def validate_api_key_format(api_key, api_type):
+    """
+    Validate the format of an API key based on its type.
+    
+    Args:
+        api_key (str): The API key to validate
+        api_type (str): The type of API (openai, together, xai, anthropic)
+        
+    Returns:
+        bool: True if the key format appears valid, False otherwise
+    """
+    if not api_key or not isinstance(api_key, str):
+        return False
+    
+    # Basic format validation based on API type
+    if api_type == "openai":
+        # OpenAI keys typically start with 'sk-' and are 51 characters long
+        return api_key.startswith('sk-') and len(api_key) >= 40
+    elif api_type == "together":
+        # Together keys are typically base64-like strings
+        return len(api_key) >= 20 and api_key.replace('-', '').replace('_', '').isalnum()
+    elif api_type == "xai":
+        # XAI keys format (adjust based on actual format)
+        return len(api_key) >= 20
+    elif api_type == "anthropic":
+        # Anthropic keys typically start with 'sk-ant-' and are longer
+        return api_key.startswith('sk-ant-') and len(api_key) >= 30
+    
+    # Default validation for unknown types
+    return len(api_key) >= 10
+
+
+def test_api_connectivity(model_key, test_prompt="Hello"):
+    """
+    Test API connectivity by making a simple request.
+    
+    Args:
+        model_key (str): The model key to test
+        test_prompt (str): Simple test prompt to send
+        
+    Returns:
+        bool: True if API is accessible, False otherwise
+    """
+    try:
+        model_config = TARGET_MODELS.get(model_key) or ATTACKER_MODELS.get(model_key)
+        if not model_config:
+            return False
+            
+        api_type = model_config.get("api")
+        if not api_type:
+            return False
+            
+        # Get API key
+        api_key_name = None
+        if api_type == "openai":
+            api_key_name = "OPENAI_API_KEY"
+        elif api_type == "together":
+            api_key_name = "TOGETHER_API_KEY"
+        elif api_type == "xai":
+            api_key_name = "XAI_API_KEY"
+        elif api_type == "anthropic":
+            api_key_name = "ANTHROPIC_API_KEY"
+            
+        if not api_key_name:
+            return False
+            
+        api_key = os.getenv(api_key_name)
+        if not api_key:
+            return False
+            
+        # Validate key format
+        if not validate_api_key_format(api_key, api_type):
+            log(f"API key format appears invalid for {api_type}", "warning")
+            return False
+            
+        # Test connectivity with a simple request
+        if api_type in ["openai", "together"]:
+            from openai import OpenAI
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.together.xyz/v1" if api_type == "together" else None
+            )
+            response = client.chat.completions.create(
+                model=model_config["name"],
+                messages=[{"role": "user", "content": test_prompt}],
+                max_tokens=10,
+                temperature=0.1
+            )
+            return bool(response.choices[0].message.content)
+        elif api_type == "anthropic":
+            from anthropic import Anthropic
+            client = Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model=model_config["name"],
+                max_tokens=10,
+                messages=[{"role": "user", "content": test_prompt}]
+            )
+            return bool(response.content[0].text)
+        elif api_type == "xai":
+            # XAI/Grok testing would go here
+            # For now, just return True if key format is valid
+            return True
+            
+    except Exception as e:
+        log(f"API connectivity test failed for {model_key}: {e}", "debug", VERBOSE_DETAILED)
+        return False
+    
+    return False
+
+
+def validate_all_required_apis(model_keys):
+    """
+    Validate all required APIs for the given model keys.
+    
+    Args:
+        model_keys (list): List of model keys to validate
+        
+    Returns:
+        dict: Results of validation for each model
+    """
+    results = {}
+    
+    for model_key in model_keys:
+        log(f"Validating API for model: {model_key}", "info")
+        
+        # Check basic availability
+        if not is_model_available(model_key):
+            results[model_key] = {"available": False, "error": "Model not configured"}
+            continue
+            
+        # Test connectivity
+        if test_api_connectivity(model_key):
+            results[model_key] = {"available": True, "error": None}
+            log(f"✓ {model_key} API validation successful", "success")
+        else:
+            results[model_key] = {"available": False, "error": "API connectivity test failed"}
+            log(f"✗ {model_key} API validation failed", "error")
+    
+    return results

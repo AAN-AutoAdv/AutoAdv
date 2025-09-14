@@ -601,15 +601,7 @@ class PatternManager:
         for pattern in top_patterns:
             hints += f"- {pattern_descriptions.get(pattern, pattern)}\n"
         
-        # Add learning effectiveness metrics (excluding turn-specific data)
-        learning_metrics = self.patterns.get("learning_effectiveness", {})
-        if not isinstance(learning_metrics, dict):
-            learning_metrics = {}
-        if learning_metrics.get("total_successes", 0) > 0:
-            hints += "\nLearning Effectiveness:\n"
-            hints += f"- Total successes: {learning_metrics.get('total_successes', 0)}\n"
-            hints += f"- Patterns learned: {learning_metrics.get('patterns_learned', 0)}\n"
-            hints += f"- Convergence rate: {learning_metrics.get('convergence_rate', 0.0):.1%}\n"
+        # Learning effectiveness metrics removed - not actionable for prompt generation
         
         # Add examples from successful attempts
         effective_examples = self.patterns.get("effective_prompts", [])

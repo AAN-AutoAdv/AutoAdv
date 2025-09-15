@@ -332,19 +332,24 @@ def generate_model_specific_insights(pattern_manager, target_model):
         model_data = model_patterns[target_model]
         insights = []
         
-        # Success rate insight
-        if "success_rate" in model_data:
-            rate = model_data["success_rate"]
-            insights.append(f"- Success rate against {target_model}: {rate:.1%}")
-        
-        # Effective techniques for this model
-        if "effective_techniques" in model_data:
-            techniques = model_data["effective_techniques"]
-            top_techniques = sorted(techniques.items(), key=lambda x: x[1], reverse=True)[:3]
-            if top_techniques:
-                insights.append("- Most effective techniques:")
-                for technique, count in top_techniques:
-                    insights.append(f"  • {technique.replace('_', ' ').title()}: {count} successes")
+        # Check if model_data is a dictionary or just a count
+        if isinstance(model_data, dict):
+            # Success rate insight
+            if "success_rate" in model_data:
+                rate = model_data["success_rate"]
+                insights.append(f"- Success rate against {target_model}: {rate:.1%}")
+            
+            # Effective techniques for this model
+            if "effective_techniques" in model_data:
+                techniques = model_data["effective_techniques"]
+                top_techniques = sorted(techniques.items(), key=lambda x: x[1], reverse=True)[:3]
+                if top_techniques:
+                    insights.append("- Most effective techniques:")
+                    for technique, count in top_techniques:
+                        insights.append(f"  • {technique.replace('_', ' ').title()}: {count} successes")
+        else:
+            # Simple count format
+            insights.append(f"- Total successes against {target_model}: {model_data}")
         
         return "\n".join(insights) if insights else ""
         
@@ -365,7 +370,9 @@ def generate_temperature_insights(pattern_manager):
         temps = []
         for prompt_data in effective_prompts:
             if isinstance(prompt_data, dict) and "temperature" in prompt_data:
-                temps.append(prompt_data["temperature"])
+                temp_value = prompt_data["temperature"]
+                if isinstance(temp_value, (int, float)):
+                    temps.append(temp_value)
         
         if not temps:
             return ""

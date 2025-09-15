@@ -298,7 +298,7 @@ class PatternManager:
             # Sort by evaluation score and keep the best ones
             self.patterns["effective_prompts"] = sorted(
                 self.patterns["effective_prompts"],
-                key=lambda x: x.get("evaluation_score", 0),
+                key=lambda x: x.get("evaluation_score", 0) if isinstance(x, dict) else 0,
                 reverse=True
             )[:50]
         
@@ -629,8 +629,8 @@ class PatternManager:
             
         # Get top patterns
         pattern_items = [(k, v) for k, v in self.patterns.items() 
-                        if k not in ["effective_prompts", "success_by_model"] 
-                        and not k.endswith("_success") and v > 0]
+                        if k not in ["effective_prompts", "success_by_model", "learning_effectiveness"] 
+                        and not k.endswith("_success") and isinstance(v, (int, float)) and v > 0]
         pattern_items.sort(key=lambda x: x[1], reverse=True)
         top_patterns = [p[0] for p in pattern_items[:5]]
         

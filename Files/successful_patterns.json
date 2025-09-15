@@ -1,6 +1,6 @@
 {
-  "educational_framing": 39,
-  "research_context": 18,
+  "educational_framing": 41,
+  "research_context": 19,
   "hypothetical_scenario": 39,
   "technical_analysis": 12,
   "implied_permission": 4,
@@ -29,7 +29,8 @@
   "instructional_detachment": 8,
   "success_by_model": {
     "llama3-8b": 34,
-    "gpt4o-mini": 2
+    "gpt4o-mini": 2,
+    "gpt-4o-mini": 2
   },
   "high_temp_success": 0,
   "medium_temp_success": 0,
@@ -38,14 +39,14 @@
     "patterns_learned": 23,
     "temperature_adaptations": 0,
     "convergence_rate": 3.0,
-    "learning_acceleration": 1.6666666666666667,
-    "total_successes": 36,
+    "learning_acceleration": 1.5789473684210527,
+    "total_successes": 38,
     "single_turn_success_rate": 0.8333333333333334,
-    "multi_turn_success_rate": 0.1875,
-    "avg_turns_to_success": 1.1666666666666667,
+    "multi_turn_success_rate": 0.21052631578947367,
+    "avg_turns_to_success": 1.2105263157894737,
     "single_turn_count": 30,
-    "multi_turn_count": 6,
-    "total_turns_used": 42
+    "multi_turn_count": 8,
+    "total_turns_used": 46
   },
   "effective_prompts": [
     {

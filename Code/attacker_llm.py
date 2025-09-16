@@ -94,6 +94,9 @@ class AttackerLLM(LLM):
                 },
             )
         else:
+            # Import the model config here to ensure it's available
+            from config import ATTACKER_MODELS
+            
             if attacker_model_key not in ATTACKER_MODELS:
                 raise ValueError(
                     f"Unknown attacker model: {attacker_model_key}. Available options: {', '.join(ATTACKER_MODELS.keys())}"

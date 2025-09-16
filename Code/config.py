@@ -72,11 +72,11 @@ TARGET_MODELS = {
         "token_model": "gpt-4o-mini",
     },
     "Qwen3-235b": {
-        "name": "Qwen/Qwen3-235B-A22B-fp8-tput",
+        "name": "Qwen/Qwen3-235B-A22B-FP8",
         "api": "together",
         "request_cost": 0.88,  # $0.88 per million tokens
         "response_cost": 0.88,  # $0.88 per million tokens
-        "token_model": "Qwen/Qwen3-235B-A22B-fp8-tput",
+        "token_model": "Qwen/Qwen2.5-7B-Instruct",  # Use a compatible Qwen tokenizer
     },
     "Mistral-24b": {
         "name": "mistralai/Mistral-Small-24B-Instruct-2501",

@@ -433,7 +433,7 @@ def get_recent_successful_examples(pattern_manager, limit=2):
         return ""
 
 
-def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False):
+def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False, baseline_mode=False):
     """
     Process a single prompt through the multi-turn conversation framework.
 
@@ -464,16 +464,26 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
     log(f"Processing: {prompt_summary}", "info", VERBOSE_DETAILED)
 
     try:
-        # Ensure the malicious prompt is not reframed before attacker turn 1
-        conversation_log = multi_turn_conversation(
-            attacker,
-            target,
-            prompt,  # Pass the original malicious prompt directly
-            config["turns"],
-            config["strongreject_threshold"],
-            pattern_manager,
-            no_temperature_learning,
-        )
+        # Use baseline mode if specified
+        if baseline_mode:
+            from conversation import baseline_conversation
+            conversation_log = baseline_conversation(
+                attacker,
+                target,
+                prompt,  # Pass the original malicious prompt directly
+                config["strongreject_threshold"],
+            )
+        else:
+            # Ensure the malicious prompt is not reframed before attacker turn 1
+            conversation_log = multi_turn_conversation(
+                attacker,
+                target,
+                prompt,  # Pass the original malicious prompt directly
+                config["turns"],
+                config["strongreject_threshold"],
+                pattern_manager,
+                no_temperature_learning,
+            )
 
         # Check if successful
         is_success = conversation_log.get("status") == "success"
@@ -564,7 +574,7 @@ def calculate_cumulative_asr(conversation_logs, max_turns=10):
     return cumulative_asr
 
 
-def run_experiment(config, pattern_memory=None, no_temperature_learning=False):
+def run_experiment(config, pattern_memory=None, no_temperature_learning=False, baseline_mode=False):
     """
     Run the experiment with the specified configuration.
 
@@ -609,7 +619,7 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False):
     ) as executor:
         # Submit tasks
         future_to_prompt = {
-            executor.submit(process_prompt, prompt, config, pattern_memory, no_temperature_learning): prompt
+            executor.submit(process_prompt, prompt, config, pattern_memory, no_temperature_learning, baseline_mode): prompt
             for prompt in prompts
         }
 
@@ -975,6 +985,9 @@ def main():
     parser.add_argument(
         "--no-temperature-learning", action="store_true", help="Disable temperature adjustments and learning"
     )
+    parser.add_argument(
+        "--baseline-mode", action="store_true", help="Use simple baseline mode without advanced features (no patterns, no temperature learning, single turn)"
+    )
 
     args = parser.parse_args()
 
@@ -1003,16 +1016,28 @@ def main():
     
     log("All required APIs validated successfully", "success")
 
-    # Initialize pattern manager for enhanced prompts
-    pattern_memory = PatternManager() if args.use_pattern_memory else None
-    if pattern_memory:
-        # Set enhancement flag based on configuration
-        pattern_memory._enhance_enabled = DEFAULT_CONFIG.get("pattern_enhanced_prompts", True)
+    # Initialize pattern manager for enhanced prompts (disabled in baseline mode)
+    if args.baseline_mode:
+        pattern_memory = None
+        log("Baseline mode: Pattern learning disabled", "info")
+    else:
+        pattern_memory = PatternManager() if args.use_pattern_memory else None
+        if pattern_memory:
+            # Set enhancement flag based on configuration
+            pattern_memory._enhance_enabled = DEFAULT_CONFIG.get("pattern_enhanced_prompts", True)
 
-    # Load system prompts with pattern enhancement
-    initial_prompt, followup_prompt = load_system_prompts(
-        args.system_prompt, args.followup_prompt, pattern_memory, args.target_model
-    )
+    # Load system prompts with pattern enhancement (disabled in baseline mode)
+    if args.baseline_mode:
+        # In baseline mode, load prompts without pattern enhancement
+        initial_prompt, followup_prompt = load_system_prompts(
+            args.system_prompt, args.followup_prompt, None, args.target_model
+        )
+        log("Baseline mode: Using simple system prompts without pattern enhancement", "info")
+    else:
+        # Normal mode with pattern enhancement
+        initial_prompt, followup_prompt = load_system_prompts(
+            args.system_prompt, args.followup_prompt, pattern_memory, args.target_model
+        )
     if not initial_prompt:
         log("Failed to load system prompt.", "error")
         return False
@@ -1049,6 +1074,7 @@ def main():
         "logs_directory": args.logs_dir,
         "save_temp_files": args.save_temp,
         "use_pattern_memory": not args.no_patterns,
+        "baseline_mode": args.baseline_mode,
         "initial_prompt": initial_prompt,
         "followup_prompt": followup_prompt,
     }
@@ -1057,7 +1083,7 @@ def main():
     display_config(config)
 
     # Run experiment with pattern-enhanced system prompts
-    conversation_logs, success_rate, cumulative_asr = run_experiment(config, pattern_memory, args.no_temperature_learning)
+    conversation_logs, success_rate, cumulative_asr = run_experiment(config, pattern_memory, args.no_temperature_learning, args.baseline_mode)
 
     # Save results
     if conversation_logs:

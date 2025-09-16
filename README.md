@@ -1,21 +1,8 @@
 # AutoAdv: Automated Adversarial Prompting for Multi-Turn Jailbreaking of Large Language Models
 
-## Overview
+## Abstract
 
-AutoAdv is a research framework for systematically evaluating and exposing vulnerabilities in the safety mechanisms of Large Language Models (LLMs) through automated, multi-turn adversarial prompting. By leveraging a parametric attacker LLM, AutoAdv generates semantically disguised malicious prompts and iteratively refines its attack strategy based on the target model's responses. This enables comprehensive, realistic assessment of LLM safety in conversational contexts.
-
-**Key Features:**
-
-- **Automated Multi-Turn Jailbreaking:** Dynamically generates and adapts adversarial prompts over multiple conversational turns to bypass LLM safety guardrails.
-- **Adaptive Learning:** Analyzes failed jailbreak attempts and iteratively improves attack strategies using techniques such as roleplaying, misdirection, and contextual manipulation.
-- **Prompt Rewriting Techniques:** Employs framing, contextualization, obfuscation, format specification, and subtle reframing to maximize attack success.
-- **Few-Shot Learning:** Utilizes a curated set of human-authored jailbreak examples to guide and enhance adversarial prompt generation.
-- **Dynamic Hyperparameter Tuning:** Adjusts temperature and system prompts in real time based on observed attack performance.
-- **Objective Evaluation:** Uses the StrongREJECT framework to quantitatively assess attack success rates (ASR) and model safety.
-
-## Research Impact
-
-AutoAdv reveals that state-of-the-art LLMs—including ChatGPT, Llama, and DeepSeek—remain highly vulnerable to sophisticated, automated multi-turn attacks. Our experiments demonstrate jailbreak success rates of up to 86% for harmful content generation, with multi-turn attacks increasing success rates by up to 51% compared to single-turn approaches. These findings highlight the urgent need for more robust, context-aware LLM safety mechanisms.
+Large Language Models (LLMs) are susceptible to jailbreaking attacks, in which carefully crafted inputs bypass safety guardrails and elicit harmful outputs. We present AutoAdv, an automated framework for dynamic, multi-turn jailbreaking that both generates adversarial prompts and systematically evaluates vulnerabilities in LLM safety mechanisms. Our method leverages an attacker LLM that rewrites malicious prompts through strategic paraphrasing, hyperparameter tuning, and retrieval from a database of historically effective attack patterns. We evaluate the attack success rate (ASR) with an optimal scoring framework across multiple interaction turns. Extensive empirical testing on state-of-the-art commercial and open-source models reveals significant weaknesses, with AutoAdv achieving an ASR of 95% on Llama-3.1-8B. These findings indicate that current safety mechanisms remain susceptible to sophisticated, multi-turn attacks.
 
 ## Getting Started
 

@@ -198,7 +198,7 @@ DEFAULT_CONFIG = {
     "attacker_model": "grok-3-mini-beta",
     "target_memory_enabled": True,
     "sample_size": 5,
-    "max_workers": 1,
+    "max_workers": 10,
     "verbosity_level": VERBOSE_DETAILED,
     "temperature_strategy": "adaptive",  # Options: adaptive, oscillating, progressive, reset
     "intelligent_strategy_selection": True,  # Use AI-driven strategy selection based on conversation context

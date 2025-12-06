@@ -3,7 +3,7 @@ import json
 from typing import Dict, List, Set, Any, Optional, Union
 from logging_utils import log as logging_utils_log
 from config import VERBOSE_DETAILED, SUCCESSFUL_PATTERNS_PATH
-from technique_analyzer import categorize_prompt # Import for relevance scoring
+from technique_analyzer import categorize_prompt # Import for prompt categorization
 
 class PatternManager:
     """
@@ -119,100 +119,7 @@ class PatternManager:
         # Load existing data if available
         self.load()
     
-    def calculate_relevance(self, current_prompt: str, historical_prompt_data: dict) -> float:
-        """
-        Calculate relevance between a current prompt and a historical one.
-        
-        Args:
-            current_prompt (str): The new prompt being considered.
-            historical_prompt_data (dict): Data of a past successful prompt.
-            
-        Returns:
-            float: A relevance score between 0 and 1.
-        """
-        # 1. Objective Similarity (Category Matching)
-        current_category = categorize_prompt(current_prompt)
-        historical_category = historical_prompt_data.get("category", "unknown")
-        category_score = 1.0 if current_category == historical_category else 0.3
-        
-        # 2. Shared Keywords
-        current_words = set(current_prompt.lower().split())
-        historical_words = set(historical_prompt_data.get("original", "").lower().split())
-        common_words = current_words.intersection(historical_words)
-        keyword_score = min(len(common_words) / 5, 1.0) # Normalize, cap at 5 common words
-        
-        # 3. Contextual Framing (Technique Matching)
-        historical_techniques = set(historical_prompt_data.get("techniques", []))
-        # This part can be enhanced by analyzing the current_prompt for potential techniques
-        # For now, we assume a base relevance and increase if techniques are present
-        framing_score = 0.5 + (0.5 * min(len(historical_techniques) / 3, 1.0)) # Normalize
-        
-        # Combine scores with weighting
-        relevance = (category_score * 0.5) + (keyword_score * 0.3) + (framing_score * 0.2)
-        return min(relevance, 1.0)
-
-    def rank_and_select_attack(self, current_prompt: str, top_n: int = 3) -> List[Dict]:
-        """
-        Scores and ranks historical attacks, selecting the best candidates.
-
-        Args:
-            current_prompt (str): The initial malicious prompt for the new attack.
-            top_n (int): The number of top candidates to return.
-
-        Returns:
-            list: A list of the top-ranked historical attack data dictionaries.
-        """
-        if not self.patterns.get("effective_prompts"):
-            logging_utils_log("No historical prompts available for ranking.", "info")
-            return []
-
-        ranked_prompts = []
-        for prompt_data in self.patterns["effective_prompts"]:
-            if not isinstance(prompt_data, dict):
-                continue
-
-            # --- Composite Score Calculation ---
-            # 1. Jailbreak Success (Turn Number): Lower is better
-            turn_score = 1.0 - (min(prompt_data.get("turn", 5) - 1, 4) / 4.0) # Normalize 1-5 turns
-
-            # 2. Refusal Likelihood (Implicit): Lower is better
-            # We use the evaluation score from the log as a proxy. Higher score = less refusal.
-            eval_score = prompt_data.get("evaluation_score", 0.5) # Default to neutral
-            refusal_score = eval_score
-
-            # 3. Semantic Coherence (Implicit): Higher is better
-            # We use the number of techniques as a proxy for a well-structured, coherent prompt.
-            coherence_score = min(len(prompt_data.get("techniques", [])) / 5.0, 1.0) # Normalize
-
-            # 4. Safety Bypass Rate (Implicit): Higher is better
-            # This is directly represented by the evaluation score.
-            bypass_score = eval_score
-            
-            composite_score = (
-                (turn_score * 0.3) + 
-                (refusal_score * 0.3) + 
-                (coherence_score * 0.2) + 
-                (bypass_score * 0.2)
-            )
-
-            # --- Relevance to Current Prompt ---
-            relevance = self.calculate_relevance(current_prompt, prompt_data)
-
-            # --- Final Ranking Score ---
-            final_score = (composite_score * 0.6) + (relevance * 0.4)
-            
-            ranked_prompts.append({
-                "score": final_score,
-                "prompt_data": prompt_data
-            })
-
-        # Sort by final score in descending order
-        ranked_prompts.sort(key=lambda x: x["score"], reverse=True)
-        
-        logging_utils_log(f"Ranked {len(ranked_prompts)} historical attacks. Top score: {ranked_prompts[0]['score']:.2f}." if ranked_prompts else "No attacks to rank.", "info", VERBOSE_DETAILED)
-
-        return [item["prompt_data"] for item in ranked_prompts[:top_n]]
-
+    
     def start_tracking(self, original_prompt, rewritten_prompt):
         """
         Begin tracking a new conversation attempt.
@@ -288,6 +195,7 @@ class PatternManager:
             "model": model_name,
             "temperature": temperature,
             "evaluation_score": evaluation_score,
+            "turn": turn_number,
             "category": categorize_prompt(self.current_tracking["original_prompt"])
         }
         
@@ -548,6 +456,7 @@ class PatternManager:
                 "model": target_model,
                 "temperature": attacker_temp,
                 "evaluation_score": successful_eval_score,
+                "turn": successful_turn_number,
                 "category": categorize_prompt(conv_log.get("maliciousPrompt", ""))
             }
             
@@ -617,9 +526,14 @@ class PatternManager:
             recent_single_rate = learning_metrics.get("single_turn_count", 0) / learning_metrics["total_successes"]
             learning_metrics["learning_acceleration"] = recent_single_rate * 2.0  # Scale factor for readability
     
-    def generate_system_prompt_hints(self):
+    def generate_system_prompt_hints(self, target_model=None, turn_number=None):
         """
         Generate hints to add to system prompt based on successful patterns.
+        Ranks techniques by frequency, evaluation score, model match, and turn match.
+        
+        Args:
+            target_model (str, optional): Target model name for model-specific ranking
+            turn_number (int, optional): Current turn number for turn-specific ranking
         
         Returns:
             str: Hints text to add to system prompt
@@ -627,12 +541,89 @@ class PatternManager:
         if not self.patterns.get("effective_prompts"):
             return ""
             
-        # Get top patterns
-        pattern_items = [(k, v) for k, v in self.patterns.items() 
-                        if k not in ["effective_prompts", "success_by_model", "learning_effectiveness"] 
-                        and not k.endswith("_success") and isinstance(v, (int, float)) and v > 0]
-        pattern_items.sort(key=lambda x: x[1], reverse=True)
-        top_patterns = [p[0] for p in pattern_items[:5]]
+        # Analyze techniques from effective prompts
+        technique_stats = {}
+        
+        for prompt_data in self.patterns["effective_prompts"]:
+            if not isinstance(prompt_data, dict):
+                continue
+                
+            techniques = prompt_data.get("techniques", [])
+            evaluation_score = prompt_data.get("evaluation_score", 0.5)
+            model = prompt_data.get("model", "")
+            turn = prompt_data.get("turn", 1)
+            
+            for technique in techniques:
+                if technique not in technique_stats:
+                    technique_stats[technique] = {
+                        "frequency": 0,
+                        "total_score": 0.0,
+                        "model_matches": 0,
+                        "turn_matches": 0,
+                        "model_match_count": 0,
+                        "turn_match_count": 0
+                    }
+                
+                stats = technique_stats[technique]
+                stats["frequency"] += 1
+                stats["total_score"] += evaluation_score
+                
+                # Count model matches
+                if target_model and model == target_model:
+                    stats["model_matches"] += 1
+                stats["model_match_count"] += 1
+                
+                # Count turn matches (within 1 turn for flexibility)
+                if turn_number is not None:
+                    if abs(turn - turn_number) <= 1:
+                        stats["turn_matches"] += 1
+                stats["turn_match_count"] += 1
+        
+        if not technique_stats:
+            return ""
+        
+        # Calculate scores for each technique
+        scored_techniques = []
+        
+        for technique, stats in technique_stats.items():
+            # Average evaluation score
+            avg_score = stats["total_score"] / stats["frequency"]
+            
+            # Frequency score (normalized, 30% weight)
+            max_frequency = max(s["frequency"] for s in technique_stats.values())
+            frequency_score = (stats["frequency"] / max_frequency) * 0.3 if max_frequency > 0 else 0
+            
+            # Evaluation score (normalized, 30% weight)
+            eval_score_normalized = min(avg_score, 1.0) * 0.3
+            
+            # Model match score (25% weight) - bonus if technique worked well on this model
+            model_score = 0.0
+            if target_model and stats["model_match_count"] > 0:
+                model_match_rate = stats["model_matches"] / stats["model_match_count"]
+                model_score = model_match_rate * 0.25
+            elif not target_model:
+                # If no target model specified, give neutral score
+                model_score = 0.125  # Half of max, so it doesn't penalize
+            
+            # Turn match score (15% weight) - bonus if technique worked well on this turn
+            turn_score = 0.0
+            if turn_number is not None and stats["turn_match_count"] > 0:
+                turn_match_rate = stats["turn_matches"] / stats["turn_match_count"]
+                turn_score = turn_match_rate * 0.15
+            elif turn_number is None:
+                # If no turn number specified, give neutral score
+                turn_score = 0.075  # Half of max
+            
+            # Combined score (sums to 1.0 max: 0.3 + 0.3 + 0.25 + 0.15)
+            final_score = frequency_score + eval_score_normalized + model_score + turn_score
+            
+            scored_techniques.append((technique, final_score, stats))
+        
+        # Sort by final score (descending)
+        scored_techniques.sort(key=lambda x: x[1], reverse=True)
+        
+        # Get top 5 techniques
+        top_patterns = [t[0] for t in scored_techniques[:5]]
         
         if not top_patterns:
             return ""

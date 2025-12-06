@@ -285,16 +285,16 @@ def enhance_prompt_with_patterns(base_prompt, pattern_manager, target_model=None
         str: Enhanced prompt with pattern insights
     """
     try:
-        # Generate pattern-based hints
-        pattern_hints = pattern_manager.generate_system_prompt_hints()
+        # Determine turn number: initial prompts are for turn 1, followup prompts don't have a specific turn
+        turn_number = 1 if prompt_type == "initial" else None
+        
+        # Generate pattern-based hints with model and turn matching
+        pattern_hints = pattern_manager.generate_system_prompt_hints(target_model=target_model, turn_number=turn_number)
         
         # Get model-specific insights if target model provided
         model_insights = ""
         if target_model:
             model_insights = generate_model_specific_insights(pattern_manager, target_model)
-        
-        # Get successful temperature recommendations
-        temp_insights = generate_temperature_insights(pattern_manager)
         
         # Build enhancement section
         enhancement = ""
@@ -304,9 +304,6 @@ def enhance_prompt_with_patterns(base_prompt, pattern_manager, target_model=None
         
         if model_insights:
             enhancement += f"\n\n## 🎯 Model-Specific Insights for {target_model}:\n{model_insights}"
-        
-        if temp_insights:
-            enhancement += f"\n\n## 🌡️ Temperature Optimization:\n{temp_insights}"
         
         # Add recent successful examples for followup prompts
         if prompt_type == "followup":

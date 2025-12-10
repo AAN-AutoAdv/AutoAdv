@@ -201,15 +201,6 @@ class PatternManager:
         
         self.patterns["effective_prompts"].append(prompt_data)
         
-        # Limit effective_prompts to prevent memory issues (keep top 50)
-        if len(self.patterns["effective_prompts"]) > 50:
-            # Sort by evaluation score and keep the best ones
-            self.patterns["effective_prompts"] = sorted(
-                self.patterns["effective_prompts"],
-                key=lambda x: x.get("evaluation_score", 0) if isinstance(x, dict) else 0,
-                reverse=True
-            )[:50]
-        
         # Save changes
         return self.save()
         
@@ -308,13 +299,13 @@ class PatternManager:
             bool: Whether saving was successful
         """
         try:
-            # Sort effective prompts by technique count
+            # Sort effective prompts by technique count (keep all, just sorted for organization)
             if "effective_prompts" in self.patterns:
                 self.patterns["effective_prompts"] = sorted(
                     self.patterns["effective_prompts"],
                     key=lambda x: len(x.get("techniques", [])) if isinstance(x, dict) else 0,
                     reverse=True
-                )[:30]  # Keep top 30 instead of 15
+                )
             
             logging_utils_log(f"Saving {len(self.patterns['effective_prompts'])} prompts to {self.filepath}", "debug", VERBOSE_DETAILED)
             

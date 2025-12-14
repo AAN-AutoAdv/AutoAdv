@@ -214,7 +214,7 @@ class TemperatureManager:
         
         # Check if we're making negative or no progress AND scores are poor
         avg_recent = sum(recent_scores) / len(recent_scores)
-        is_regression = progress < -0.05  # Getting worse
+        is_regression = progress < -0.05 and avg_recent < (self.success_threshold * 0.5)  # Getting worse + poor scores
         is_stagnant = abs(progress) < 0.03 and avg_recent < (self.success_threshold * 0.5)  # No progress + poor scores
         
         # Also check temperature effectiveness
@@ -239,10 +239,6 @@ class TemperatureManager:
                 
             # Clamp to bounds
             self.current_temperature = max(self.min_temp, min(self.max_temp, target_temp))
-            
-        elif avg_recent < (self.success_threshold * 0.3):  # Very poor single attempt
-            # Single very bad attempt - smaller reset
-            self.current_temperature = (self.current_temperature + self.initial_temperature) / 2
         else:
             # Normal situation - use adaptive
             self._adjust_adaptive()

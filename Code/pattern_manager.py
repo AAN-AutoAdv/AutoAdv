@@ -660,23 +660,40 @@ class PatternManager:
         
         # Learning effectiveness metrics removed - not actionable for prompt generation
         
-        # Add examples from successful attempts
+        # Add examples from successful attempts that use the top-5 techniques
         effective_examples = self.patterns.get("effective_prompts", [])
         if effective_examples:
-            hints += "\nExample prompts that worked:\n"
-            for i, example in enumerate(effective_examples[:3], 1):
+            # Filter examples to only include those using at least one of the top-5 techniques
+            filtered_examples = []
+            for example in effective_examples:
                 if isinstance(example, dict):
-                    prompt_text = example.get("prompt", "")
-                    # Truncate long examples
-                    if len(prompt_text) > 150:
-                        prompt_text = prompt_text[:150] + "..."
-                    hints += f"{i}. \"{prompt_text}\"\n"
-                else:
-                    # Handle case where example is just a string
-                    example_text = example
-                    if len(example_text) > 150:
-                        example_text = example_text[:150] + "..."
-                    hints += f"{i}. \"{example_text}\"\n"
+                    example_techniques = set(example.get("techniques", []))
+                    # Check if example uses any of the top-5 techniques
+                    if example_techniques.intersection(set(top_patterns)):
+                        filtered_examples.append(example)
+                # If we have enough examples, stop
+                if len(filtered_examples) >= 3:
+                    break
+            
+            # If we don't have enough filtered examples, fall back to any examples
+            if len(filtered_examples) < 3:
+                filtered_examples = effective_examples[:3]
+            
+            if filtered_examples:
+                hints += "\nExample prompts that worked:\n"
+                for i, example in enumerate(filtered_examples[:3], 1):
+                    if isinstance(example, dict):
+                        prompt_text = example.get("prompt", "")
+                        # Truncate long examples
+                        if len(prompt_text) > 150:
+                            prompt_text = prompt_text[:150] + "..."
+                        hints += f"{i}. \"{prompt_text}\"\n"
+                    else:
+                        # Handle case where example is just a string
+                        example_text = example
+                        if len(example_text) > 150:
+                            example_text = example_text[:150] + "..."
+                        hints += f"{i}. \"{example_text}\"\n"
         
         return hints
     

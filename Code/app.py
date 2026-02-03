@@ -1,33 +1,4 @@
 #!/usr/bin/env python
-"""
-AutoAdv - Automated Adversarial Prompt Generation
-
-This is the main entry point for the AutoAdv system. It orchestrates the entire
-jailbreaking process by coordinating between the attacker LLM, target LLM, and
-pattern learning system.
-
-CORE ARCHITECTURE:
-==================
-1. PatternManager: Learns and stores successful jailbreaking techniques
-2. AttackerLLM: Rewrites malicious prompts using learned patterns  
-3. TargetLLM: The model being attacked (e.g., Llama, GPT)
-4. StrongREJECT: Evaluates whether attacks were successful
-5. TemperatureManager: Dynamically adjusts generation temperature
-
-MAIN WORKFLOW:
-==============
-1. Load malicious prompts from datasets (AdvBench, HarmBench)
-2. Initialize PatternManager with learned techniques from successful_patterns.json
-3. For each prompt:
-   a. AttackerLLM rewrites using system prompt enhanced with learned patterns
-   b. TargetLLM responds to rewritten prompt
-   c. StrongREJECT evaluates if jailbreak was successful
-   d. If successful, PatternManager learns new techniques
-4. Save updated patterns for future runs
-
-Usage:
-    python app.py [options]
-"""
 
 import os
 import sys
@@ -59,25 +30,20 @@ from config import (
 )
 
 
-from logging_utils import log, display_config, ensure_directory_exists
-from utils import is_model_available, get_next_filename, validate_all_required_apis
+from logging_utils import log as _log, display_config, ensure_directory_exists
+from utils import is_model_available, validate_all_required_apis
 from attacker_llm import AttackerLLM
 from target_llm import TargetLLM
 from conversation import multi_turn_conversation, save_conversation_log
 from pattern_manager import PatternManager
+from prompt_enhancer import enhance_prompt_with_patterns
+
+
+def log(message, *args, **kwargs):
+    return _log(f"App: {message}", *args, **kwargs)
 
 
 def load_prompts(filepath, sample_size=None):
-    """
-    Load prompts from CSV file with optional sampling.
-
-    Args:
-        filepath (str): Path to the CSV file
-        sample_size (int, optional): Number of prompts to randomly sample
-
-    Returns:
-        list: List of prompts
-    """
     log(f"Loading prompts from {filepath}", "info")
 
     try:
@@ -107,15 +73,6 @@ def load_prompts(filepath, sample_size=None):
 
 
 def load_multi_source_prompts(config):
-    """
-    Load prompts from multiple sources (AdvBench, HarmBench) based on configuration.
-    
-    Args:
-        config (dict): Configuration dictionary containing prompt sources and mix ratio
-        
-    Returns:
-        list: Combined list of prompts from all specified sources
-    """
     all_prompts = []
     prompt_sources = config.get("prompt_sources", ["advbench"])
     mix_ratio = config.get("prompt_mix_ratio", "equal")
@@ -230,18 +187,6 @@ def load_multi_source_prompts(config):
 
 
 def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_manager=None, target_model=None):
-    """
-    Load system prompts from files and enhance them with learned patterns.
-
-    Args:
-        initial_prompt_path (str): Path to the initial system prompt
-        followup_prompt_path (str, optional): Path to the followup system prompt
-        pattern_manager (PatternManager, optional): Pattern manager for enhancing prompts
-        target_model (str, optional): Target model for model-specific enhancements
-
-    Returns:
-        tuple: (initial_prompt, followup_prompt)
-    """
     # Load initial prompt
     try:
         with open(initial_prompt_path, "r") as f:
@@ -271,177 +216,7 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_
     return initial_prompt, followup_prompt
 
 
-def enhance_prompt_with_patterns(base_prompt, pattern_manager, target_model=None, prompt_type="initial"):
-    """
-    Enhance a system prompt with learned successful patterns.
-    
-    Args:
-        base_prompt (str): The base system prompt
-        pattern_manager (PatternManager): Pattern manager with learned patterns
-        target_model (str, optional): Target model for model-specific patterns
-        prompt_type (str): Type of prompt ("initial" or "followup")
-    
-    Returns:
-        str: Enhanced prompt with pattern insights
-    """
-    try:
-        # Determine turn number: initial prompts are for turn 1, followup prompts don't have a specific turn
-        turn_number = 1 if prompt_type == "initial" else None
-        
-        # Generate pattern-based hints with model and turn matching
-        pattern_hints = pattern_manager.generate_system_prompt_hints(target_model=target_model, turn_number=turn_number)
-        
-        # Get model-specific insights if target model provided
-        model_insights = ""
-        if target_model:
-            model_insights = generate_model_specific_insights(pattern_manager, target_model)
-        
-        # Build enhancement section
-        enhancement = ""
-        
-        if pattern_hints:
-            enhancement += f"\n\n## 🧠 Learned Successful Techniques:\n{pattern_hints}"
-        
-        if model_insights:
-            enhancement += f"\n\n## 🎯 Model-Specific Insights for {target_model}:\n{model_insights}"
-        
-        # Add recent successful examples for followup prompts
-        if prompt_type == "followup":
-            recent_examples = get_recent_successful_examples(pattern_manager)
-            if recent_examples:
-                enhancement += f"\n\n## 📈 Recent Successful Patterns:\n{recent_examples}"
-        
-        return base_prompt + enhancement
-        
-    except Exception as e:
-        log(f"Error enhancing prompt with patterns: {e}", "warning")
-        return base_prompt  # Return original prompt if enhancement fails
-
-
-def generate_model_specific_insights(pattern_manager, target_model):
-    """Generate insights specific to the target model."""
-    try:
-        # Get model-specific success patterns
-        model_patterns = pattern_manager.patterns.get("success_by_model", {})
-        if target_model not in model_patterns:
-            return ""
-        
-        model_data = model_patterns[target_model]
-        insights = []
-        
-        # Check if model_data is a dictionary or just a count
-        if isinstance(model_data, dict):
-            # Success rate insight
-            if "success_rate" in model_data:
-                rate = model_data["success_rate"]
-                insights.append(f"- Success rate against {target_model}: {rate:.1%}")
-            
-            # Effective techniques for this model
-            if "effective_techniques" in model_data:
-                techniques = model_data["effective_techniques"]
-                top_techniques = sorted(techniques.items(), key=lambda x: x[1], reverse=True)[:3]
-                if top_techniques:
-                    insights.append("- Most effective techniques:")
-                    for technique, count in top_techniques:
-                        insights.append(f"  • {technique.replace('_', ' ').title()}: {count} successes")
-        else:
-            # Simple count format
-            insights.append(f"- Total successes against {target_model}: {model_data}")
-        
-        return "\n".join(insights) if insights else ""
-        
-    except Exception as e:
-        log(f"Error generating model insights: {e}", "debug")
-        return ""
-
-
-def generate_temperature_insights(pattern_manager):
-    """Generate temperature optimization insights."""
-    try:
-        # Analyze temperature effectiveness from successful patterns
-        effective_prompts = pattern_manager.patterns.get("effective_prompts", [])
-        if not effective_prompts:
-            return ""
-        
-        # Extract temperatures from successful attempts
-        temps = []
-        for prompt_data in effective_prompts:
-            if isinstance(prompt_data, dict) and "temperature" in prompt_data:
-                temp_value = prompt_data["temperature"]
-                if isinstance(temp_value, (int, float)):
-                    temps.append(temp_value)
-        
-        if not temps:
-            return ""
-        
-        # Calculate temperature statistics
-        avg_temp = sum(temps) / len(temps)
-        min_temp = min(temps)
-        max_temp = max(temps)
-        
-        insights = [
-            f"- Average successful temperature: {avg_temp:.2f}",
-            f"- Effective range: {min_temp:.2f} - {max_temp:.2f}",
-        ]
-        
-        # Temperature recommendations
-        if avg_temp < 0.5:
-            insights.append("- Recommendation: Lower temperatures (more focused) tend to work better")
-        elif avg_temp > 1.0:
-            insights.append("- Recommendation: Higher temperatures (more creative) tend to work better")
-        else:
-            insights.append("- Recommendation: Moderate temperatures work well")
-        
-        return "\n".join(insights)
-        
-    except Exception as e:
-        log(f"Error generating temperature insights: {e}", "debug")
-        return ""
-
-
-def get_recent_successful_examples(pattern_manager, limit=2):
-    """Get recent successful prompt examples."""
-    try:
-        effective_prompts = pattern_manager.patterns.get("effective_prompts", [])
-        if not effective_prompts:
-            return ""
-        
-        # Get most recent successful prompts
-        recent_prompts = effective_prompts[-limit:] if len(effective_prompts) >= limit else effective_prompts
-        
-        examples = []
-        for i, prompt_data in enumerate(recent_prompts, 1):
-            if isinstance(prompt_data, dict):
-                prompt_text = prompt_data.get("prompt", "")
-                score = prompt_data.get("evaluation_score", 0)
-                techniques = prompt_data.get("techniques", [])
-                
-                # Truncate long prompts
-                if len(prompt_text) > 200:
-                    prompt_text = prompt_text[:200] + "..."
-                
-                example = f"{i}. **Score: {score:.2f}** | Techniques: {', '.join(techniques[:3])}\n   \"{prompt_text}\""
-                examples.append(example)
-        
-        return "\n".join(examples) if examples else ""
-        
-    except Exception as e:
-        log(f"Error getting recent examples: {e}", "debug")
-        return ""
-
-
 def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False, baseline_mode=False):
-    """
-    Process a single prompt through the multi-turn conversation framework.
-
-    Args:
-        prompt (str): The prompt to process
-        config (dict): Configuration dictionary
-        pattern_manager (PatternManager, optional): Pattern manager for tracking successful patterns
-
-    Returns:
-        tuple: (conversation_log, is_success)
-    """
     # Create attacker and target models
     attacker = AttackerLLM(
         temperature=config["attacker_temp"],
@@ -518,16 +293,6 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
 
 
 def calculate_cumulative_asr(conversation_logs, max_turns=10):
-    """
-    Calculate cumulative ASR (Attack Success Rate) for each turn.
-    
-    Args:
-        conversation_logs (list): List of conversation logs
-        max_turns (int): Maximum number of turns to analyze
-        
-    Returns:
-        dict: Dictionary with turn-specific cumulative ASR data
-    """
     total_prompts = len(conversation_logs)
     if total_prompts == 0:
         return {}
@@ -572,16 +337,6 @@ def calculate_cumulative_asr(conversation_logs, max_turns=10):
 
 
 def run_experiment(config, pattern_memory=None, no_temperature_learning=False, baseline_mode=False):
-    """
-    Run the experiment with the specified configuration.
-
-    Args:
-        config (dict): Configuration dictionary
-        pattern_memory (PatternManager, optional): Pre-initialized pattern manager
-
-    Returns:
-        tuple: (conversation_logs, success_rate, cumulative_asr)
-    """
     # Start timing
     start_time = time.time()
 
@@ -676,15 +431,6 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
 
 
 def save_intermediate_results(config, logs, successes, count):
-    """
-    Save intermediate results during long runs.
-
-    Args:
-        config (dict): Configuration dictionary
-        logs (list): Conversation logs so far
-        successes (int): Number of successes so far
-        count (int): Number of prompts processed so far
-    """
     # Create logs directory if it doesn't exist
     logs_dir = ensure_directory_exists(
         config.get("logs_directory", DEFAULT_PATHS["logs_directory"])
@@ -717,18 +463,6 @@ def save_intermediate_results(config, logs, successes, count):
 
 
 def generate_descriptive_filename(logs_dir, config, success_rate, file_type="LOG"):
-    """
-    Generate a descriptive filename based on configuration and results.
-    
-    Args:
-        logs_dir (str): Directory to save the file
-        config (dict): Configuration dictionary
-        success_rate (float): Success rate (0.0 to 1.0)
-        file_type (str): Type of file ("LOG" or "ASR")
-    
-    Returns:
-        str: Full path to the generated filename
-    """
     import datetime
     
     # Get current timestamp
@@ -775,14 +509,6 @@ def generate_descriptive_filename(logs_dir, config, success_rate, file_type="LOG
 
 
 def save_cumulative_asr_data(cumulative_asr, config, output_file):
-    """
-    Save cumulative ASR data to a CSV file.
-    
-    Args:
-        cumulative_asr (dict): Cumulative ASR data by turn
-        config (dict): Configuration dictionary
-        output_file (str): Output file path
-    """
     import csv
     
     with open(output_file, "w", encoding="utf-8", newline="") as f:
@@ -847,7 +573,6 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
 def main():
 
 
-    """Main entry point."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Multi-Turn Prompting Framework")
 

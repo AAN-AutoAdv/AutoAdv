@@ -1,42 +1,18 @@
-"""
-General utility functions for the codebase.
-Contains helper functions for file operations, API key checking, display formatting, etc.
-"""
 from __future__ import print_function
 from dotenv import load_dotenv
-import os, glob, textwrap, shutil, time
+import os, time
 import builtins as __builtin__
-import re # Import re for strip_disclaimers
-import traceback # Import traceback for logging
-
-# Make sure progress bar library is available
-try:
-    from progress.bar import ChargingBar
-except ImportError:
-    ChargingBar = None # Set to None if library not installed
+import re
 
 # Import necessary items from local modules
-from config import VERBOSE_DETAILED, TARGET_MODELS, ATTACKER_MODELS, API_KEYS, DISCLAIMER_PATTERNS # Import necessary configs
-from logging_utils import log, VERBOSE_NORMAL, VERBOSE_DETAILED # Make sure all levels used are imported
+from config import TARGET_MODELS, ATTACKER_MODELS, API_KEYS, DISCLAIMER_PATTERNS
+from logging_utils import log, VERBOSE_NORMAL, VERBOSE_DETAILED
 
 # Load .env file at the start
 load_dotenv()
 
 # Check for the existence of a specified API key and return the key (if available)
 def check_api_key_existence(apiKeyName):
-    """
-    Check for the existence of a specified API key in environment variables.
-    Uses the value from the environment if found, otherwise prompts the user.
-
-    Args:
-        apiKeyName (str): Name of the API key environment variable (e.g., "OPENAI_API_KEY", "XAI_API_KEY")
-
-    Returns:
-        str: The API key if found or entered.
-
-    Raises:
-        ValueError: If the user doesn't provide a key when prompted.
-    """
     apiKey = os.getenv(apiKeyName)
 
     if apiKey is None:
@@ -66,7 +42,6 @@ def check_api_key_existence(apiKeyName):
         return apiKey
 
 def api_call_with_retry(api_func, *args, **kwargs):
-    """Make an API call with exponential backoff retry"""
     max_retries = 3
     retry_delay = 1  # Initial delay in seconds
     
@@ -83,18 +58,6 @@ def api_call_with_retry(api_func, *args, **kwargs):
 
 # Check for the existence of a specified file
 def check_file_existence(filepath):
-    """
-    Check if a file exists at the specified path.
-
-    Args:
-        filepath (str): Path to the file to check
-
-    Returns:
-        str: The filepath if the file exists
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist
-    """
     if not os.path.exists(filepath):
         error_msg = f"File '{filepath}' not found!"
         log(error_msg, "error")
@@ -109,21 +72,6 @@ def check_file_existence(filepath):
 
 # Check for the existence of a specified directory
 def check_directory_existence(directory, autoCreate=True):
-    """
-    Check if a directory exists, optionally creating it if it doesn't.
-
-    Args:
-        directory (str): Path to the directory to check
-        autoCreate (bool): Whether to create the directory if it doesn't exist
-
-    Returns:
-        str: The directory path
-
-    Raises:
-        FileNotFoundError: If the directory doesn't exist and autoCreate is False.
-        NotADirectoryError: If the path exists but is not a directory.
-        OSError: If directory creation fails.
-    """
     if not os.path.exists(directory):
         if autoCreate:
             try:
@@ -146,31 +94,12 @@ def check_directory_existence(directory, autoCreate=True):
 
 # Ensure a directory exists (alias for check_directory_existence for compatibility)
 def ensure_directory_exists(directory):
-    """
-    Ensure a directory exists, creating it if necessary.
-    This is an alias for check_directory_existence with default parameters.
-
-    Args:
-        directory (str): Path to the directory to check/create
-
-    Returns:
-        str: The directory path
-    """
     return check_directory_existence(directory, autoCreate=True)
 
 
 # Override the default print function to have custom types
 # DEPRECATED in favor of log function. Keep for compatibility if needed, but prefer log.
 def print(*args, type=None, **kwargs):
-    """
-    Enhanced print function with colored output for different message types.
-    Prefer using the `log` function instead.
-
-    Args:
-        *args: Values to print
-        type (str, optional): Message type ('success', 'error', 'warning', 'info')
-        **kwargs: Additional print function arguments
-    """
     color_code = ""
     type_tag_map = {
         "success": ("\033[92m", "SUCCESS"),
@@ -197,143 +126,7 @@ def print(*args, type=None, **kwargs):
     return __builtin__.print(formatted_message, **kwargs)
 
 
-# Get the next file name
-def get_next_filename(directory, baseName="data", fileExtension=".csv"):
-    """
-    Generate the next sequential filename in a directory (e.g., data0.csv, data1.csv).
-    """
-    check_directory_existence(directory)
-
-    # Match filenames like data0.csv, data1.csv, etc.
-    pattern = re.compile(rf"{re.escape(baseName)}(\d+){re.escape(fileExtension)}")
-
-    existing_files = glob.glob(os.path.join(directory, f"{baseName}*{fileExtension}"))
-
-    numbers = []
-    for file_path in existing_files:
-        filename = os.path.basename(file_path)  # Extract filename only (no full path)
-        match = pattern.match(filename)
-        if match:
-            try:
-                numbers.append(int(match.group(1)))
-            except (ValueError, IndexError):
-                pass
-
-    next_number = max(numbers) + 1 if numbers else 0
-    next_filename = f"{baseName}{next_number}{fileExtension}"
-    full_path = os.path.join(directory, next_filename)
-    log(f"Next filename generated: {full_path}", "debug", VERBOSE_DETAILED + 1)
-    return full_path
-
-
-# Progress bar to tell how far along the code is
-# Consider removing if tqdm is preferred (used in app.py)
-class ProgressBar:
-    """
-    Simple progress bar for displaying status of operations.
-    NOTE: `tqdm` is generally preferred for more complex scenarios.
-
-    Attributes:
-        userInfo (str): Information to display alongside the progress
-        total (int): Total number of steps
-        bar (ChargingBar): The progress bar instance from the `progress` library
-    """
-
-    def __init__(self, userInfo, total):
-        """
-        Initialize a new progress bar.
-
-        Args:
-            userInfo (str): Text to display with the progress bar
-            total (int): Total number of steps
-        """
-        if total <= 0:
-             log("Progress bar total must be positive.", "warning")
-             self.bar = None
-             return
-
-        self.userInfo = userInfo
-        self.total = total
-
-        # Create the bar at the start
-        # Ensure ChargingBar is available or handle import error
-        if ChargingBar:
-             try:
-                 self.bar = ChargingBar(
-                     message=f"{userInfo} %(index)d/%(max)d", # Use %d for integers
-                     max=total,
-                     suffix="%(percent).1f%% (ETA %(eta)ds)",
-                 )
-             except Exception as e:
-                 log(f"Failed to initialize ChargingBar: {e}", "warning")
-                 self.bar = None
-        else:
-             log("`progress` library not installed? Progress bar disabled.", "warning")
-             self.bar = None
-
-
-    def continue_progress(self):
-        """Increment the progress bar by one step."""
-        if self.bar:
-            try:
-                self.bar.next()
-            except Exception as e:
-                 log(f"Progress bar error: {e}", "warning")
-
-    def end_progress(self):
-        """Complete and close the progress bar."""
-        if self.bar:
-             try:
-                 self.bar.finish()
-             except Exception as e:
-                 log(f"Progress bar finish error: {e}", "warning")
-
-
-def categorize_prompt(prompt):
-    try:
-        from technique_analyzer import categorize_prompt as _categorize_prompt
-        return _categorize_prompt(prompt)
-    except ImportError:
-        log("technique_analyzer module not found for categorize_prompt", "error")
-        return "general" # Fallback
-
-
-# Get a specialized strategy (DUPLICATED - import from technique_analyzer.py)
-def get_specialized_strategy(category):
-    try:
-        from technique_analyzer import get_specialized_strategy as _get_specialized_strategy
-        return _get_specialized_strategy(category)
-    except ImportError:
-        log("technique_analyzer module not found for get_specialized_strategy", "error")
-        # Fallback strategy
-        return {
-            "framing": "Academic or educational research",
-            "persona": "Researcher or educator",
-            "format": "Analytical framework or case study",
-            "technique": "Theoretical exploration with educational purpose"
-        }
-
-# Identify working technique (DUPLICATED - import from technique_analyzer.py)
-def identify_working_technique(target_response, prompt_category):
-    try:
-        from technique_analyzer import identify_working_technique as _identify_working_technique
-        return _identify_working_technique(target_response, prompt_category)
-    except ImportError:
-        log("technique_analyzer module not found for identify_working_technique", "error")
-        return "educational_framing" # Fallback
-
-
-# Strip disclaimers (Seems appropriate for utils.py)
 def strip_disclaimers(text):
-    """
-    Strip disclaimer statements from the beginning of AI responses.
-    
-    Args:
-        text (str): The response text to clean
-        
-    Returns:
-        str: The response with disclaimers removed
-    """
     from config import DISCLAIMER_PATTERNS
     import re
     
@@ -353,17 +146,7 @@ def strip_disclaimers(text):
     
     return text
 
-# Check model availability (Seems appropriate for utils.py)
 def is_model_available(model_key):
-    """
-    Basic check if a model key exists in config and its API key is available.
-
-    Args:
-        model_key (str): The key for the model in TARGET_MODELS or ATTACKER_MODELS
-
-    Returns:
-        bool: True if the model seems configured and API key exists, False otherwise.
-    """
     # from config import TARGET_MODELS, ATTACKER_MODELS, API_KEYS # Import necessary configs - already imported at top
 
     model_config = TARGET_MODELS.get(model_key) or ATTACKER_MODELS.get(model_key)
@@ -405,16 +188,6 @@ def is_model_available(model_key):
 
 
 def validate_api_key_format(api_key, api_type):
-    """
-    Validate the format of an API key based on its type.
-    
-    Args:
-        api_key (str): The API key to validate
-        api_type (str): The type of API (openai, together, xai, anthropic)
-        
-    Returns:
-        bool: True if the key format appears valid, False otherwise
-    """
     if not api_key or not isinstance(api_key, str):
         return False
     
@@ -437,16 +210,6 @@ def validate_api_key_format(api_key, api_type):
 
 
 def test_api_connectivity(model_key, test_prompt="Hello"):
-    """
-    Test API connectivity by making a simple request.
-    
-    Args:
-        model_key (str): The model key to test
-        test_prompt (str): Simple test prompt to send
-        
-    Returns:
-        bool: True if API is accessible, False otherwise
-    """
     try:
         model_config = TARGET_MODELS.get(model_key) or ATTACKER_MODELS.get(model_key)
         if not model_config:
@@ -515,15 +278,6 @@ def test_api_connectivity(model_key, test_prompt="Hello"):
 
 
 def validate_all_required_apis(model_keys):
-    """
-    Validate all required APIs for the given model keys.
-    
-    Args:
-        model_keys (list): List of model keys to validate
-        
-    Returns:
-        dict: Results of validation for each model
-    """
     results = {}
     
     for model_key in model_keys:

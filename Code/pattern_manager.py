@@ -6,24 +6,11 @@ from config import VERBOSE_DETAILED, SUCCESSFUL_PATTERNS_PATH
 from technique_analyzer import categorize_prompt # Import for prompt categorization
 
 class PatternManager:
-    """
-    Enhanced class for tracking, analyzing, and persisting successful jailbreak patterns.
-    This centralizes pattern memory logic to ensure consistent pattern tracking with
-    improved logging and pattern detection capabilities.
-    """
-    
     def __init__(self, filepath=None):
-        """
-        Initialize pattern manager with default values or load from existing file.
-        
-        Args:
-            filepath (str, optional): Path to the pattern storage file
-        """
         self.filepath = filepath or SUCCESSFUL_PATTERNS_PATH
         self.current_tracking = None
         
         self.patterns = {
-            # Pattern tracking fields
             "educational_framing": 0,
             "research_context": 0,
             "hypothetical_scenario": 0,
@@ -43,7 +30,6 @@ class PatternManager:
             "cognitive_bias": 0,
             "domain_shifting": 0,
             
-            # New additional techniques
             "reverse_ethical_dilemmas": 0,
             "temporal_anchoring": 0,
             "dynamic_contextual_shifting": 0,
@@ -55,15 +41,12 @@ class PatternManager:
             "theoretical_scenario": 0,
             "instructional_detachment": 0,
             
-            # Target model metrics
             "success_by_model": {},
             
-            # Temperature effectiveness
             "high_temp_success": 0,
             "medium_temp_success": 0,
             "low_temp_success": 0,
             
-            # Learning effectiveness metrics
             "learning_effectiveness": {
                 "patterns_learned": 0,
                 "temperature_adaptations": 0,
@@ -78,11 +61,9 @@ class PatternManager:
                 "total_turns_used": 0
             },
             
-            # Effective prompts storage
             "effective_prompts": []
         }
         
-        # Define keywords for pattern detection
         self.keywords = {
             "educational_framing": ["educational", "learning", "academic", "inform", "understand", "study"],
             "research_context": ["research", "study", "analysis", "investigate", "academic", "paper"],
@@ -103,7 +84,6 @@ class PatternManager:
             "cognitive_bias": ["bias", "assumption", "psychological", "perception", "judgment", "belief"],
             "domain_shifting": ["domain", "field", "topic", "area", "discipline", "context"],
             
-            # Keywords for new techniques
             "reverse_ethical_dilemmas": ["ethical dilemma", "moral question", "ethical consideration", "weighing ethics", "moral reasoning"],
             "temporal_anchoring": ["historical context", "in the past", "future scenario", "time period", "ancient", "futuristic"],
             "dynamic_contextual_shifting": ["context", "shifting", "perspective change", "reframe", "viewpoint"],
@@ -116,18 +96,10 @@ class PatternManager:
             "instructional_detachment": ["instructional", "educational purpose", "academic interest", "theoretical exercise"]
         }
         
-        # Load existing data if available
         self.load()
     
     
     def start_tracking(self, original_prompt, rewritten_prompt):
-        """
-        Begin tracking a new conversation attempt.
-        
-        Args:
-            original_prompt (str): The original malicious prompt
-            rewritten_prompt (str): The rewritten prompt by the attacker
-        """
         self.current_tracking = {
             "original_prompt": original_prompt,
             "rewritten_prompt": rewritten_prompt,
@@ -138,56 +110,36 @@ class PatternManager:
             "temperature": None
         }
         
-        # Pre-analyze the rewritten prompt for patterns
         for pattern, words in self.keywords.items():
             if any(word.lower() in rewritten_prompt.lower() for word in words):
                 self.current_tracking["detected_patterns"].add(pattern)
     
     def record_success(self, turn_number, model_name, temperature, evaluation_score=1.0):
-        """
-        Record a successful jailbreak attempt.
-        
-        Args:
-            turn_number (int): Which turn was successful
-            model_name (str): Name of the target model
-            temperature (float): Temperature used for generation
-            evaluation_score (float): The evaluation score (e.g., from StrongReject)
-            
-        Returns:
-            bool: Whether the success was properly recorded
-        """
         if not self.current_tracking:
             logging_utils_log("Cannot record success: no active tracking session", "error")
             return False
             
-        # Update tracking info
         self.current_tracking["successful"] = True
         self.current_tracking["turn"] = turn_number
         self.current_tracking["model"] = model_name
         self.current_tracking["temperature"] = temperature
         self.current_tracking["evaluation_score"] = evaluation_score
         
-        # Update model success count
         models_dict = self.patterns["success_by_model"]
         if model_name not in models_dict:
             models_dict[model_name] = 1
         else:
             models_dict[model_name] += 1
         
-        # Update turn success count
-        # Update learning effectiveness metrics
         self._update_learning_effectiveness(turn_number)
         
-        # Update pattern counts
         for pattern in self.current_tracking["detected_patterns"]:
             if pattern in self.patterns:
                 self.patterns[pattern] += 1
                 
-        # Default unknown pattern if none detected
         if not self.current_tracking["detected_patterns"]:
             self.current_tracking["detected_patterns"].add("unknown_technique")
             
-        # Add to effective prompts
         prompt_data = {
             "prompt": self.current_tracking["rewritten_prompt"],
             "original": self.current_tracking["original_prompt"],
@@ -205,12 +157,6 @@ class PatternManager:
         return self.save()
         
     def load(self) -> bool:
-        """
-        Load pattern data from file if it exists.
-        
-        Returns:
-            bool: Whether loading was successful
-        """
         if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, "r") as f:
@@ -235,15 +181,6 @@ class PatternManager:
         return False
     
     def _validate_pattern_data(self, data):
-        """
-        Validate the structure of loaded pattern data.
-        
-        Args:
-            data (dict): The loaded JSON data
-            
-        Returns:
-            bool: True if data structure is valid, False otherwise
-        """
         if not isinstance(data, dict):
             return False
             
@@ -292,12 +229,6 @@ class PatternManager:
         return True
     
     def save(self):
-        """
-        Save pattern data to file.
-        
-        Returns:
-            bool: Whether saving was successful
-        """
         try:
             # Sort effective prompts by technique count (keep all, just sorted for organization)
             if "effective_prompts" in self.patterns:
@@ -339,15 +270,6 @@ class PatternManager:
             return False
     
     def analyze_logs(self, logs):
-        """
-        Process a list of conversation logs and update patterns.
-
-        Args:
-            logs (list): List of conversation log dictionaries
-
-        Returns:
-            int: Number of successfully processed logs
-        """
         success_count = 0
 
         for log in logs:
@@ -362,15 +284,6 @@ class PatternManager:
         return success_count
     
     def analyze_conversation(self, conv_log):
-        """
-        Analyze a conversation log to extract patterns and update counts.
-        
-        Args:
-            conv_log (dict): Conversation log dictionary
-            
-        Returns:
-            bool: Whether analysis was successful
-        """
         if conv_log.get("status") != "success":
             return False
         
@@ -457,12 +370,6 @@ class PatternManager:
         return False
     
     def _update_learning_effectiveness(self, successful_turn_number):
-        """
-        Update learning effectiveness metrics based on successful attack.
-        
-        Args:
-            successful_turn_number (int): Turn number where attack succeeded
-        """
         # Ensure learning_effectiveness is properly initialized
         if "learning_effectiveness" not in self.patterns or not isinstance(self.patterns["learning_effectiveness"], dict):
             self.patterns["learning_effectiveness"] = {
@@ -518,17 +425,6 @@ class PatternManager:
             learning_metrics["learning_acceleration"] = recent_single_rate * 2.0  # Scale factor for readability
     
     def generate_system_prompt_hints(self, target_model=None, turn_number=None):
-        """
-        Generate hints to add to system prompt based on successful patterns.
-        Ranks techniques by frequency, evaluation score, model match, and turn match.
-        
-        Args:
-            target_model (str, optional): Target model name for model-specific ranking
-            turn_number (int, optional): Current turn number for turn-specific ranking
-        
-        Returns:
-            str: Hints text to add to system prompt
-        """
         if not self.patterns.get("effective_prompts"):
             return ""
             
@@ -699,18 +595,6 @@ class PatternManager:
     
     
     def get_successful_temperatures(self, prompt_category):
-        """
-        Get temperatures that were successful for a given prompt category.
-        
-        NOTE: This function is currently UNUSED in the codebase but kept for
-        potential future temperature optimization features.
-        
-        Args:
-            prompt_category (str): Category of the prompt
-            
-        Returns:
-            list: List of successful temperature values
-        """
         successful_temps = []
         
         # Return empty list if no patterns or no effective prompts
@@ -729,18 +613,6 @@ class PatternManager:
         return successful_temps
     
     def get_successful_strategies(self, prompt_category):
-        """
-        Get strategy names that were successful for a given prompt category.
-        
-        NOTE: This function is currently UNUSED in the codebase but kept for
-        potential future strategy optimization features.
-        
-        Args:
-            prompt_category (str): Category of the prompt
-            
-        Returns:
-            list: List of successful strategy names
-        """
         successful_strategies = []
         
         # Return empty list if no patterns or no effective prompts
@@ -759,7 +631,6 @@ class PatternManager:
         return successful_strategies
     
     def reset(self):
-        """Reset pattern memory to default values."""
         for key in self.patterns:
             if key == "success_by_model":
                 self.patterns[key] = {}
@@ -772,18 +643,6 @@ class PatternManager:
         logging_utils_log("Pattern memory has been reset", "info")
     
     def enhance_followup_prompts(self, conv_log):
-        """
-        Enhance follow-up prompts dynamically based on the target's responses.
-
-        NOTE: This function is currently UNUSED in the codebase but kept for
-        potential future dynamic prompt enhancement features.
-
-        Args:
-            conv_log (dict): Conversation log dictionary
-
-        Returns:
-            str: Enhanced follow-up prompt
-        """
         turns = conv_log.get("turns", [])
         if not turns:
             return ""

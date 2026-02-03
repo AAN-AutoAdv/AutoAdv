@@ -4,58 +4,20 @@ import math
 import multiprocessing
 import re
 from dataclasses import dataclass
-import os, sys
+import os
+import sys
 
-import openai, tqdm
+import openai
+import tqdm
 
-import tiktoken
-from transformers import AutoTokenizer
+# Add Code directory to path to import shared modules
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Code'))
+from token_calculator import TokenCalculator
 
-# Removed the circular import from conversation
-
-
-class TokenCalculator:
-    def __init__(self, requestCostPerToken, responseCostPerToken, model=None):
-        # variable initialization
-        self.requestCostPerToken = requestCostPerToken  # REQUEST cost
-        self.responseCostPerToken = responseCostPerToken  # RESPONSE cost
-        self.model = model
-
-    # the number of tokens a prompt has
-    def calculate_tokens(self, text: str, tokenModel=None) -> int:
-        # sometimes, the model endpoints differ (not sure why though)
-        # we need to account for that with a custom model name
-        if tokenModel is not None:
-            model = tokenModel
-        else:
-            model = self.model
-
-        # model must be defined
-        if model is None:
-            raise ValueError("Model was not defined. Unable to calculate tokens.")
-
-        # openAI models use tiktoken
-        if "gpt" in model:
-            encoding = tiktoken.encoding_for_model(model)
-            return len(encoding.encode(text))
-        else:
-            # other models use Hugging Face's AutoTokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model)
-            return len(tokenizer.tokenize(text))
-
-    # the cost in USD amount given the number of tokens used and their respective cost per tokens
-    def calculate_cost(self, tokenCount, isRequest=True) -> float:
-        # models can have different costs based on if you are making a request of if its responding
-        costPerToken = (
-            self.requestCostPerToken if isRequest else self.responseCostPerToken
-        )
-
-        return tokenCount * costPerToken
-
-
+# GPT-4o-mini pricing: $0.15 per 1M input tokens, $0.60 per 1M output tokens
 tokenCalculator = TokenCalculator(
-    requestCostPerToken=0.000015,
-    responseCostPerToken=0.0000006,
+    requestCostPerToken=0.15,  # per million tokens
+    responseCostPerToken=0.60,  # per million tokens
     model="gpt-4o-mini",
 )
 

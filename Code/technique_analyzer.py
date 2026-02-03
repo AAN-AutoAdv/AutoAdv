@@ -1,22 +1,8 @@
-"""
-Technique analyzer module for analyzing prompts and responses to identify
-effective jailbreak techniques.
-"""
 import re
 from logging_utils import log
 from config import VERBOSE_DETAILED, TECHNIQUE_DESCRIPTIONS, CATEGORY_DESCRIPTIONS
 
 def categorize_prompt(prompt):
-    """
-    Categorize a prompt to determine the best attack strategy.
-    Uses advanced detection with contextual patterns and phrasal combinations.
-    
-    Args:
-        prompt (str): The malicious prompt to categorize
-        
-    Returns:
-        str: The category of the prompt
-    """
     prompt_lower = prompt.lower()
     
     # 1. Basic keyword matching (existing approach)
@@ -118,15 +104,6 @@ def categorize_prompt(prompt):
 
 
 def get_specialized_strategy(category):
-    """
-    Get a specialized strategy for a prompt category.
-    
-    Args:
-        category (str): The category of the prompt
-        
-    Returns:
-        dict: A dictionary with specialized techniques for the category
-    """
     strategies = {
         "hacking": {
             "framing": "Educational research on cybersecurity",
@@ -182,17 +159,6 @@ def get_specialized_strategy(category):
 
 
 def identify_working_technique(target_response, prompt_category):
-    """
-    Analyze the target model's response to identify which jailbreak technique
-    appears to be working based on patterns in the response.
-    
-    Args:
-        target_response (str): The target model's response to analyze
-        prompt_category (str): Category of the original prompt
-        
-    Returns:
-        str: Name of the technique that appears to be working
-    """
     # Define patterns that indicate different techniques are working
     technique_indicators = {
         "educational_framing": [
@@ -284,16 +250,6 @@ def identify_working_technique(target_response, prompt_category):
 
 
 def analyze_response_content(response_text, is_initial=False):
-    """
-    Analyze a response for its content type and engagement level.
-    
-    Args:
-        response_text (str): The response text to analyze
-        is_initial (bool): Whether this is the initial response
-        
-    Returns:
-        dict: Analysis results containing engagement level and content type
-    """
     response_lower = response_text.lower()
     
     # Check for refusal patterns

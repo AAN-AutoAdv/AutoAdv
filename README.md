@@ -37,11 +37,11 @@ Large Language Models (LLMs) are susceptible to jailbreaking attacks, in which c
 
 #### Quick Start
 ```bash
-# Basic attack with default settings
+# Basic attack with explicit attacker model
 python Code/app.py --target-model llama3-8b --attacker-model gpt4o-mini --sample-size 10
 
 # Full learning mode with pattern memory
-python Code/app.py --target-model llama3-8b --use-pattern-memory --sample-size 100 --turns 6
+python Code/app.py --target-model llama3-8b --use_pattern_memory --sample-size 100 --turns 6
 
 # Multi-source prompts with custom mixing
 python Code/app.py --target-model llama3-8b --prompt-sources advbench harmbench --prompt-mix equal
@@ -64,10 +64,10 @@ python Code/app.py --target-model llama3-8b --workers 20 --sample-size 200
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--target-model` | Target model to attack | `llama3-8b` |
-| `--attacker-model` | Attacker model for rewriting | `gpt4o-mini` |
+| `--attacker-model` | Attacker model for rewriting | `grok-3-mini-beta` |
 | `--sample-size` | Number of prompts to test | `5` |
 | `--turns` | Maximum conversation turns | `10` |
-| `--use-pattern-memory` | Enable pattern learning | `False` |
+| `--use_pattern_memory` | Enable pattern learning | `False` |
 | `--prompt-sources` | Prompt datasets to use | `advbench harmbench` |
 | `--prompt-mix` | How to mix prompt sources | `equal` |
 | `--workers` | Parallel processing threads | `10` |
@@ -78,29 +78,29 @@ python Code/app.py --target-model llama3-8b --workers 20 --sample-size 200
 
 ```
 AutoAdv/
-├── Code/                          # Core framework modules
-│   ├── app.py                     # Main entry point and orchestration
-│   ├── attacker_llm.py           # Attacker model implementation
-│   ├── target_llm.py             # Target model implementation
-│   ├── conversation.py            # Multi-turn conversation management
-│   ├── pattern_manager.py         # Pattern learning and storage
-│   ├── temperature_manager.py     # Dynamic temperature adjustment
-│   ├── config.py                  # Configuration and model definitions
-│   └── ...                       # Additional utility modules
-├── Files/                         # Data and configuration files
+├── Code/                                   # Core framework modules
+│   ├── app.py                              # Main entry point and orchestration
+│   ├── attacker_llm.py                     # Attacker model implementation
+│   ├── target_llm.py                       # Target model implementation
+│   ├── conversation.py                     # Multi-turn conversation management
+│   ├── pattern_manager.py                  # Pattern learning and storage
+│   ├── temperature_manager.py              # Dynamic temperature adjustment
+│   ├── config.py                           # Configuration and model definitions
+│   └── ...                                 # Additional utility modules
+├── Files/                                  # Data and configuration files
 │   ├── advbench_adversarial_prompts.csv    # AdvBench dataset
 │   ├── harmbench_adversarial_prompts.csv   # HarmBench dataset
-│   ├── system_prompt.md           # Base attacker system prompt
-│   ├── system_prompt_followup.md  # Follow-up system prompt
-│   └── successful_patterns.json   # Learned attack patterns
-├── Helpers/                       # Evaluation and utility scripts
-│   ├── strongreject_evaluator.py  # StrongREJECT evaluation
+│   ├── system_prompt.md                    # Base attacker system prompt
+│   ├── system_prompt_followup.md           # Follow-up system prompt
+│   └── successful_patterns.json            # Learned attack patterns
+├── Helpers/                                # Evaluation and utility scripts
+│   ├── strongreject_evaluator.py           # StrongREJECT evaluation
 │   └── strongreject_evaluator_prompt.txt
-├── Logs/                          # Experiment results
+├── Logs/                                   # Experiment results
 │   ├── Full Learning-100 prompts-Llama-3.1-8B/
 │   ├── Baseline-100 prompts-Llama-3.1-8B/
-│   └── ...                       # Additional experiment results
-└── requirements.txt               # Python dependencies
+│   └── ...                                 # Additional experiment results
+└── requirements.txt                        # Python dependencies
 ```
 
 ## Experimental Results

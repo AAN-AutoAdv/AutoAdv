@@ -1,25 +1,5 @@
-"""
-Temperature management module for adaptive response strategies.
-This module provides functionality for dynamically adjusting temperature
-based on conversation progress and success metrics.
-"""
-
 class TemperatureManager:
-    """
-    Manages temperature settings for LLM interactions based on success metrics
-    and adaptive strategies.
-    """
-    
     def __init__(self, initial_temperature=0.7, min_temp=0.1, max_temp=1.0, success_threshold=0.5):
-        """
-        Initialize the temperature manager.
-        
-        Args:
-            initial_temperature (float): Starting temperature (default: 0.7)
-            min_temp (float): Minimum temperature value (default: 0.1)
-            max_temp (float): Maximum temperature value (default: 1.0)
-            success_threshold (float): Threshold for considering an attempt successful (default: 0.5)
-        """
         self.current_temperature = initial_temperature
         self.initial_temperature = initial_temperature
         self.min_temp = min_temp
@@ -34,18 +14,6 @@ class TemperatureManager:
         self.consecutive_strategy_uses = 0
     
     def adjust_temperature(self, success_indicator, strategy="adaptive"):
-        """
-        Adjust temperature based on success of previous interactions.
-        Only adjusts for unsuccessful attempts (below success threshold).
-        
-        Args:
-            success_indicator (float): Value between 0 and 1 indicating success of last interaction
-            strategy (str): Strategy to use for temperature adjustment 
-                           ("adaptive", "oscillating", "progressive", or "reset")
-        
-        Returns:
-            float: The new temperature value
-        """
         self.success_history.append(success_indicator)
         
         # Strategy coordination tracking
@@ -94,7 +62,6 @@ class TemperatureManager:
         return self.current_temperature
     
     def _adjust_adaptive(self):
-        """Adaptive temperature adjustment based on recent success (only for failed attempts)"""
         # Get the last 3 success indicators, or fewer if history is shorter
         # Only consider unsuccessful attempts (below threshold) for temperature adjustment
         recent_failed = [score for score in self.success_history[-3:] if score < self.success_threshold]
@@ -119,7 +86,6 @@ class TemperatureManager:
             self.current_temperature += 0.02
     
     def _adjust_oscillating(self):
-        """Smart oscillation with controlled exploration to escape local minima"""
         recent_failed = [score for score in self.success_history[-4:] if score < self.success_threshold]
         
         if len(recent_failed) < 3:
@@ -167,7 +133,6 @@ class TemperatureManager:
             self._adjust_adaptive()
     
     def _adjust_progressive(self):
-        """Progressive temperature changes based on failed attempts trajectory"""
         # Only consider unsuccessful attempts for trajectory analysis
         recent_failed = [score for score in self.success_history[-5:] if score < self.success_threshold]
         
@@ -194,7 +159,6 @@ class TemperatureManager:
             self._adjust_adaptive()
     
     def _adjust_reset(self):
-        """Smart reset based on sustained lack of progress over time"""
         if len(self.success_history) < 5:
             # Not enough history, use adaptive
             self._adjust_adaptive()
@@ -244,24 +208,19 @@ class TemperatureManager:
             self._adjust_adaptive()
     
     def get_current_temperature(self):
-        """Get the current temperature value"""
         return self.current_temperature
     
     def reset(self):
-        """Reset temperature to initial value"""
         self.current_temperature = self.initial_temperature
         return self.current_temperature
     
     def get_temperature_history(self):
-        """Get the temperature history list"""
         return self.temperature_history
     
     def get_success_history(self):
-        """Get the success history list"""
         return self.success_history
     
     def get_strategy_stats(self):
-        """Get statistics about strategy usage and effectiveness"""
         return {
             "last_strategy_used": self.last_strategy_used,
             "strategy_changes": self.strategy_change_count,
@@ -272,7 +231,6 @@ class TemperatureManager:
         }
     
     def _detect_strategy_conflicts(self, strategy):
-        """Detect potential conflicts between strategies"""
         if len(self.temperature_history) < 3:
             return False
         
@@ -289,23 +247,12 @@ class TemperatureManager:
         return False
     
     def reset_coordination_state(self):
-        """Reset strategy coordination tracking (useful for new conversations)"""
         self.last_strategy_used = None
         self.strategy_change_count = 0
         self.consecutive_strategy_uses = 0
 
     
     def recommend_strategy(self, turn_number=1, base_strategy="adaptive"):
-        """
-        Intelligently recommend the best temperature adjustment strategy based on conversation context.
-        
-        Args:
-            turn_number (int): Current turn in the conversation
-            base_strategy (str): Base strategy from configuration
-        
-        Returns:
-            str: Recommended strategy ("adaptive", "oscillating", "progressive", "reset")
-        """
         recent_failed = [score for score in self.success_history[-5:] if score < self.success_threshold]
         
         # Not enough data - use base strategy
@@ -357,12 +304,6 @@ class TemperatureManager:
         return "adaptive"
     
     def analyze_conversation_state(self):
-        """
-        Analyze the current conversation state for debugging and optimization.
-        
-        Returns:
-            dict: Analysis of conversation patterns and recommendations
-        """
         recent_failed = [score for score in self.success_history[-5:] if score < self.success_threshold]
         
         if not recent_failed:

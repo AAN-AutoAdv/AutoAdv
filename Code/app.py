@@ -9,7 +9,6 @@ import argparse
 import pandas as pd
 from tqdm import tqdm
 
-# Add Helpers directory to path
 sys.path.insert(
     1,
     os.path.join(
@@ -17,7 +16,6 @@ sys.path.insert(
     ),
 )
 
-# Import modules
 from config import (
     TARGET_MODELS,
     DEFAULT_PATHS,
@@ -47,11 +45,9 @@ def load_prompts(filepath, sample_size=None):
     log(f"Loading prompts from {filepath}", "info")
 
     try:
-        # Read CSV file
         df_prompts = pd.read_csv(filepath)
         all_prompts = df_prompts["prompt"].tolist()
 
-        # Handle sampling
         if sample_size and sample_size < len(all_prompts):
             prompts = random.sample(all_prompts, sample_size)
             log(
@@ -78,13 +74,11 @@ def load_multi_source_prompts(config):
     mix_ratio = config.get("prompt_mix_ratio", "equal")
     sample_size = config.get("sample_size")
     
-    # Define source mappings
     source_files = {
         "advbench": config.get("adversarial_prompts", DEFAULT_PATHS["adversarial_prompts"]),
         "harmbench": config.get("harmbench_prompts", DEFAULT_PATHS["harmbench_prompts"])
     }
     
-    # Load prompts from each source
     source_prompts = {}
     for source in prompt_sources:
         if source in source_files:
@@ -101,38 +95,30 @@ def load_multi_source_prompts(config):
         log("No prompt sources could be loaded", "error")
         return []
     
-    # Combine prompts based on mix ratio
     if mix_ratio == "equal":
-        # Equal sampling from each source - use smaller of (min_size, sample_size/num_sources)
         num_sources = len(source_prompts)
         if sample_size:
-            # If sample_size is specified, divide equally among sources
             prompts_per_source = max(1, sample_size // num_sources)  # Ensure at least 1 prompt per source
             min_size = min(prompts_per_source, min(len(prompts) for prompts in source_prompts.values()))
         else:
-            # If no sample_size, use the smallest available dataset size
             min_size = min(len(prompts) for prompts in source_prompts.values())
         
         for source, prompts in source_prompts.items():
-            # Randomly sample equal number from each source
             selected = random.sample(prompts, min_size)
             all_prompts.extend([(prompt, source) for prompt in selected])
             log(f"Randomly selected {len(selected)} prompts from {source} (equal mix)", "info")
     
     elif mix_ratio == "advbench_heavy":
-        # 70% AdvBench, 30% others
         total_needed = sample_size if sample_size else 100  # Default to 100 if no sample_size
         advbench_count = int(total_needed * 0.7)
         others_count = total_needed - advbench_count
         
         if "advbench" in source_prompts:
-            # Randomly sample from AdvBench
             selected_count = min(advbench_count, len(source_prompts["advbench"]))
             selected = random.sample(source_prompts["advbench"], selected_count)
             all_prompts.extend([(prompt, "advbench") for prompt in selected])
             log(f"Randomly selected {selected_count} prompts from advbench (70%)", "info")
             
-            # Remaining from other sources
             other_sources = {k: v for k, v in source_prompts.items() if k != "advbench"}
             if other_sources:
                 prompts_per_other = others_count // len(other_sources)
@@ -143,19 +129,16 @@ def load_multi_source_prompts(config):
                     log(f"Randomly selected {count} prompts from {source} (30%)", "info")
     
     elif mix_ratio == "harmbench_heavy":
-        # 70% HarmBench, 30% others  
         total_needed = sample_size if sample_size else 100  # Default to 100 if no sample_size
         harmbench_count = int(total_needed * 0.7)
         others_count = total_needed - harmbench_count
         
         if "harmbench" in source_prompts:
-            # Randomly sample from HarmBench
             selected_count = min(harmbench_count, len(source_prompts["harmbench"]))
             selected = random.sample(source_prompts["harmbench"], selected_count)
             all_prompts.extend([(prompt, "harmbench") for prompt in selected])
             log(f"Randomly selected {selected_count} prompts from harmbench (70%)", "info")
             
-            # Remaining from other sources
             other_sources = {k: v for k, v in source_prompts.items() if k != "harmbench"}
             if other_sources:
                 prompts_per_other = others_count // len(other_sources)
@@ -166,20 +149,16 @@ def load_multi_source_prompts(config):
                     log(f"Randomly selected {count} prompts from {source} (30%)", "info")
     
     else:  # "custom" or fallback
-        # Combine all prompts, then randomly sample if needed
         for source, prompts in source_prompts.items():
             all_prompts.extend([(prompt, source) for prompt in prompts])
             log(f"Added all {len(prompts)} prompts from {source} (custom mix)", "info")
     
-    # Shuffle the combined prompts to ensure random order
     random.shuffle(all_prompts)
     
-    # Apply final sampling only for custom mix ratio or if we have more than requested
     if mix_ratio == "custom" and sample_size and sample_size < len(all_prompts):
         all_prompts = random.sample(all_prompts, sample_size)
         log(f"Final sampling: randomly selected {sample_size} prompts from combined sources", "info")
     
-    # Extract just the prompts (remove source tags for now, but could be useful for logging)
     final_prompts = [prompt for prompt, source in all_prompts]
     
     log(f"Total prompts loaded: {len(final_prompts)}", "success")
@@ -187,7 +166,6 @@ def load_multi_source_prompts(config):
 
 
 def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_manager=None, target_model=None):
-    # Load initial prompt
     try:
         with open(initial_prompt_path, "r") as f:
             initial_prompt = f.read()
@@ -195,7 +173,6 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_
         log(f"Error loading initial system prompt: {e}", "error")
         initial_prompt = None
 
-    # Load followup prompt if available
     followup_prompt = None
     if followup_prompt_path and os.path.exists(followup_prompt_path):
         try:
@@ -204,9 +181,7 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_
         except Exception as e:
             log(f"Error loading followup system prompt: {e}", "error")
 
-    # Enhance prompts with learned patterns if available and enabled
     if pattern_manager and initial_prompt:
-        # Check if pattern enhancement is enabled (default: True for backward compatibility)
         enhance_enabled = getattr(pattern_manager, '_enhance_enabled', True)
         if enhance_enabled:
             initial_prompt = enhance_prompt_with_patterns(initial_prompt, pattern_manager, target_model, "initial")
@@ -217,7 +192,6 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_
 
 
 def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False, baseline_mode=False):
-    # Create attacker and target models
     attacker = AttackerLLM(
         temperature=config["attacker_temp"],
         instructions=config["initial_prompt"],
@@ -231,12 +205,10 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
         memory_enabled=config["target_memory_enabled"],
     )
 
-    # Process prompt
     prompt_summary = prompt[:30] + "..." if len(prompt) > 30 else prompt
     log(f"Processing: {prompt_summary}", "info", VERBOSE_DETAILED)
 
     try:
-        # Use baseline mode if specified
         if baseline_mode:
             from conversation import baseline_conversation
             conversation_log = baseline_conversation(
@@ -246,7 +218,6 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
                 config["strongreject_threshold"],
             )
         else:
-            # Ensure the malicious prompt is not reframed before attacker turn 1
             conversation_log = multi_turn_conversation(
                 attacker,
                 target,
@@ -257,14 +228,11 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
                 no_temperature_learning,
             )
 
-        # Check if successful
         is_success = conversation_log.get("status") == "success"
 
-        # Store metadata in the log for pattern analysis
         conversation_log["targetModel"] = target.model_key
         conversation_log["attackerTemp"] = attacker.temperature
 
-        # Log success or failure
         if is_success:
             log(
                 f"Success! [{conversation_log.get('processing_time', 0):.2f}s] Prompt: {prompt_summary}",
@@ -297,33 +265,25 @@ def calculate_cumulative_asr(conversation_logs, max_turns=10):
     if total_prompts == 0:
         return {}
     
-    # Track cumulative successes by turn
     cumulative_successes = {}
     turn_successes = {}
     
-    # Initialize counters
     for turn in range(1, max_turns + 1):
         cumulative_successes[turn] = 0
         turn_successes[turn] = 0
     
-    # Process each conversation log
     for conv_log in conversation_logs:
         status = conv_log.get("status", "failure")
         
-        # Use the successTurn field that's already tracked in conversation_log
         success_turn = conv_log.get("successTurn")
         
-        # Update cumulative counts
         if success_turn and status == "success":
-            # Mark this prompt as successful for all turns >= success_turn
             for turn in range(success_turn, max_turns + 1):
                 cumulative_successes[turn] += 1
             
-            # Mark this prompt as successful for the specific turn
             if success_turn <= max_turns:
                 turn_successes[success_turn] += 1
     
-    # Calculate cumulative ASR percentages
     cumulative_asr = {}
     for turn in range(1, max_turns + 1):
         cumulative_asr[turn] = {
@@ -337,22 +297,17 @@ def calculate_cumulative_asr(conversation_logs, max_turns=10):
 
 
 def run_experiment(config, pattern_memory=None, no_temperature_learning=False, baseline_mode=False):
-    # Start timing
     start_time = time.time()
 
-    # Use provided pattern memory or initialize new one
     if pattern_memory is None:
         pattern_memory = (
             PatternManager() if config.get("use_pattern_memory", True) else None
         )
 
-    # Load prompts from multiple sources
     if config.get("prompt_sources") and len(config["prompt_sources"]) > 1:
-        # Multi-source loading
         prompts = load_multi_source_prompts(config)
         log(f"Using multi-source prompt loading: {config['prompt_sources']}", "info")
     else:
-        # Single source loading (backward compatibility)
         prompts = load_prompts(config["adversarial_prompts"], config["sample_size"])
         log("Using single-source prompt loading", "info")
     
@@ -360,22 +315,18 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
         log("No prompts to process.", "error")
         return [], 0, {}
 
-    # Process prompts
     conversation_logs = []
     successes = 0
     total = len(prompts)
 
-    # Use ThreadPoolExecutor for parallel processing
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=config["max_workers"]
     ) as executor:
-        # Submit tasks
         future_to_prompt = {
             executor.submit(process_prompt, prompt, config, pattern_memory, no_temperature_learning, baseline_mode): prompt
             for prompt in prompts
         }
 
-        # Process results as they complete
         with tqdm(total=total, desc="Processing prompts") as progress_bar:
             for future in concurrent.futures.as_completed(future_to_prompt):
                 try:
@@ -385,10 +336,8 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
                     if is_success:
                         successes += 1
 
-                    # Update progress bar
                     progress_bar.update(1)
 
-                    # Save intermediate results if enabled
                     if (
                         config.get("save_temp_files", False)
                         and len(conversation_logs) % 10 == 0
@@ -400,20 +349,16 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
                     prompt = future_to_prompt[future]
                     log(f"Error processing prompt '{prompt}': {e}", "error")
 
-    # Calculate success rate
     success_rate = successes / total if total > 0 else 0
     end_time = time.time()
     total_time = end_time - start_time
 
-    # Calculate cumulative ASR
     cumulative_asr = calculate_cumulative_asr(conversation_logs, config["turns"])
 
-    # Display results
     log("\nEXECUTION SUMMARY", "result")
     log(f"Success rate: {successes}/{total} ({success_rate:.2f}%)", "result")
     log(f"Total execution time: {total_time:.2f} seconds", "result")
     
-    # Display cumulative ASR results
     log("\nCUMULATIVE ASR BY TURN", "result")
     log("Turn | Cumulative Successes | Cumulative ASR | Turn Successes | Turn ASR", "result")
     log("-" * 80, "result")
@@ -422,7 +367,6 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
             data = cumulative_asr[turn]
             log(f"{turn:4d} | {data['cumulative_successes']:19d} | {data['cumulative_asr']:13.2f}% | {data['turn_successes']:14d} | {data['turn_asr']:7.2f}%", "result")
 
-    # Save patterns if using pattern memory
     if pattern_memory:
         if pattern_memory.analyze_logs(conversation_logs):
             log("Updated pattern memory with successful patterns", "success")
@@ -431,15 +375,12 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
 
 
 def save_intermediate_results(config, logs, successes, count):
-    # Create logs directory if it doesn't exist
     logs_dir = ensure_directory_exists(
         config.get("logs_directory", DEFAULT_PATHS["logs_directory"])
     )
 
-    # Create temp file name
     temp_file = os.path.join(logs_dir, f"temp_results_{count}.csv")
 
-    # Create run info
     run_info = {
         "Attacker Temperature": config["attacker_temp"],
         "Target Temperature": config["target_temp"],
@@ -456,7 +397,6 @@ def save_intermediate_results(config, logs, successes, count):
         "Attacker Model": config["attacker_model"],
     }
 
-    # Save logs
     success_rate_str = f"{(successes / count * 100):.2f}%" if count > 0 else "0.00%"
     save_conversation_log(run_info, logs, success_rate_str, temp_file)
     log(f"Saved intermediate results to {temp_file}", "info")
@@ -465,20 +405,16 @@ def save_intermediate_results(config, logs, successes, count):
 def generate_descriptive_filename(logs_dir, config, success_rate, file_type="LOG"):
     import datetime
     
-    # Get current timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Extract key configuration info
     target_model = config.get("target_model", "unknown")
     sample_size = config.get("sample_size", 0)
     turns = config.get("turns", 0)
     pattern_enabled = config.get("use_pattern_memory", False)
     attacker_model = config.get("attacker_model", "unknown")
     
-    # Format success rate
     success_pct = f"{success_rate * 100:.1f}pct" if success_rate is not None else "unknown"
     
-    # Create descriptive components
     components = [
         file_type,
         target_model,
@@ -489,15 +425,12 @@ def generate_descriptive_filename(logs_dir, config, success_rate, file_type="LOG
         timestamp
     ]
     
-    # Join with underscores and add extension
     filename = "_".join(components) + ".csv"
     
-    # Ensure the filename is safe for filesystem
     filename = filename.replace(" ", "").replace("/", "-").replace("\\", "-")
     
     full_path = os.path.join(logs_dir, filename)
     
-    # If file already exists, add a counter
     counter = 1
     original_path = full_path
     while os.path.exists(full_path):
@@ -514,7 +447,6 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
     with open(output_file, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         
-        # Write header info
         header_fields = [
             f"Target Model = {config.get('target_model_name', 'Unknown')}",
             f"Target Model Key = {config.get('target_model', 'Unknown')}",
@@ -529,13 +461,11 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
         writer.writerow(header_fields)
         writer.writerow([])  # Empty row for spacing
         
-        # Write ASR data header
         writer.writerow([
             "Turn", "Cumulative Successes", "Cumulative ASR (%)", 
             "Turn Successes", "Turn ASR (%)"
         ])
         
-        # Write ASR data for each turn
         for turn in sorted(cumulative_asr.keys()):
             data = cumulative_asr[turn]
             writer.writerow([
@@ -546,7 +476,6 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
                 f"{data['turn_asr']:.2f}"
             ])
         
-        # Add summary statistics
         writer.writerow([])  # Empty row
         writer.writerow(["SUMMARY STATISTICS"])
         
@@ -559,7 +488,6 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
                 f"({final_data['cumulative_successes']} successes)"
             ])
             
-            # Find turn with highest ASR
             max_asr_turn = max(cumulative_asr.keys(), 
                              key=lambda t: cumulative_asr[t]["cumulative_asr"])
             max_asr_data = cumulative_asr[max_asr_turn]
@@ -573,10 +501,8 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
 def main():
 
 
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Multi-Turn Prompting Framework")
 
-    # Model parameters
     parser.add_argument(
         "--target-model",
         type=str,
@@ -602,7 +528,6 @@ def main():
         help="Attacker model to use",
     )
 
-    # Conversation parameters
     parser.add_argument(
         "--turns",
         type=int,
@@ -622,7 +547,6 @@ def main():
         help="Enable conversation memory for target model",
     )
 
-    # Execution parameters
     parser.add_argument(
         "--sample-size",
         type=int,
@@ -649,7 +573,6 @@ def main():
         help="Verbosity level",
     )
 
-    # File paths
     parser.add_argument(
         "--prompts",
         type=str,
@@ -697,7 +620,6 @@ def main():
         help="Directory for logs",
     )
 
-    # Feature flags
     parser.add_argument(
         "--save-temp", action="store_true", help="Save intermediate results"
     )
@@ -713,24 +635,19 @@ def main():
 
     args = parser.parse_args()
 
-    # Set global verbosity level
     global VERBOSE_LEVEL
     VERBOSE_LEVEL = args.verbose
 
-    # Check target model availability and validate APIs
     log(f"Checking if model '{args.target_model}' is available...", "info")
     
-    # Validate both target and attacker models
     models_to_validate = [args.target_model, args.attacker_model]
     validation_results = validate_all_required_apis(models_to_validate)
     
-    # Check target model
     if not validation_results.get(args.target_model, {}).get("available", False):
         error_msg = validation_results.get(args.target_model, {}).get("error", "Unknown error")
         log(f"Target model '{args.target_model}' is not available: {error_msg}", "error")
         return False
     
-    # Check attacker model
     if not validation_results.get(args.attacker_model, {}).get("available", False):
         error_msg = validation_results.get(args.attacker_model, {}).get("error", "Unknown error")
         log(f"Attacker model '{args.attacker_model}' is not available: {error_msg}", "error")
@@ -738,25 +655,20 @@ def main():
     
     log("All required APIs validated successfully", "success")
 
-    # Initialize pattern manager for enhanced prompts (disabled in baseline mode)
     if args.baseline_mode:
         pattern_memory = None
         log("Baseline mode: Pattern learning disabled", "info")
     else:
         pattern_memory = PatternManager() if args.use_pattern_memory else None
         if pattern_memory:
-            # Set enhancement flag based on configuration
             pattern_memory._enhance_enabled = DEFAULT_CONFIG.get("pattern_enhanced_prompts", True)
 
-    # Load system prompts with pattern enhancement (disabled in baseline mode)
     if args.baseline_mode:
-        # In baseline mode, load prompts without pattern enhancement
         initial_prompt, followup_prompt = load_system_prompts(
             args.system_prompt, args.followup_prompt, None, args.target_model
         )
         log("Baseline mode: Using simple system prompts without pattern enhancement", "info")
     else:
-        # Normal mode with pattern enhancement
         initial_prompt, followup_prompt = load_system_prompts(
             args.system_prompt, args.followup_prompt, pattern_memory, args.target_model
         )
@@ -764,7 +676,6 @@ def main():
         log("Failed to load system prompt.", "error")
         return False
 
-    # Log pattern enhancement status
     if pattern_memory:
         pattern_count = len(pattern_memory.patterns.get("effective_prompts", []))
         if pattern_count > 0:
@@ -772,7 +683,6 @@ def main():
         else:
             log("No learned patterns available - using base system prompts", "info")
 
-    # Create configuration
     config = {
         "target_model": args.target_model,
         "target_model_name": TARGET_MODELS[args.target_model]["name"],
@@ -801,21 +711,15 @@ def main():
         "followup_prompt": followup_prompt,
     }
 
-    # Display configuration
     display_config(config)
 
-    # Run experiment with pattern-enhanced system prompts
     conversation_logs, success_rate, cumulative_asr = run_experiment(config, pattern_memory, args.no_temperature_learning, args.baseline_mode)
 
-    # Save results
     if conversation_logs:
-        # Create logs directory if it doesn't exist
         logs_dir = ensure_directory_exists(config["logs_directory"])
 
-        # Generate descriptive filename
         output_file = generate_descriptive_filename(logs_dir, config, success_rate)
 
-        # Create run info
         run_info = {
             "Attacker Temperature": config["attacker_temp"],
             "Target Temperature": config["target_temp"],
@@ -834,14 +738,12 @@ def main():
             "Max Workers": config.get("max_workers", 1),
         }
 
-        # Save logs
         success_rate_str = f"{(success_rate * 100):.2f}%"
         save_conversation_log(
             run_info, conversation_logs, success_rate_str, output_file
         )
         log(f"All conversation logs saved to {output_file}", "success")
         
-        # Save cumulative ASR data to a separate file
         asr_output_file = generate_descriptive_filename(logs_dir, config, success_rate, file_type="ASR")
         save_cumulative_asr_data(cumulative_asr, config, asr_output_file)
         log(f"Cumulative ASR data saved to {asr_output_file}", "success")
@@ -850,8 +752,6 @@ def main():
 
 
 if __name__ == "__main__":
-    # Clear screen for fresh start
     os.system("cls" if os.name == "nt" else "clear")
 
-    # Run the main function
     main()

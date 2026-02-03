@@ -1,14 +1,11 @@
 import random
 import traceback  # Import traceback for logging
 
-# Make sure OpenAI is imported if used
 try:
     from openai import OpenAI
 except ImportError:
-    # Handle case where openai library might not be installed if only using other APIs
     OpenAI = None
     pass
-# Import necessary items from local modules
 from llm_base import LLM
 from logging_utils import (
     log,
@@ -70,7 +67,6 @@ class AttackerLLM(LLM):
                 "api", "openai"
             )  # Default to openai if not specified
 
-            # set the initial parameters and variables
             super().__init__(
                 model=model_config["name"],
                 temperature=temperature,
@@ -100,7 +96,6 @@ class AttackerLLM(LLM):
                 raise ImportError("OpenAI library not installed.")
             return OpenAI(api_key=check_api_key_existence("OPENAI_API_KEY"))
         elif self.api_type == "together":
-            # Together AI also uses the OpenAI client format
             if not OpenAI:
                 raise ImportError("OpenAI library not installed (needed for Together).")
             return OpenAI(
@@ -139,19 +134,10 @@ class AttackerLLM(LLM):
 
     def rewrite(self, prompt):
         if "grok" in self.model_key.lower():
-            # Make sure we're using the correct system prompt variable name
             system_prompt = (
                 self.initial_instructions
             )  # Make sure this matches your variable name
 
-            # Debug logging to verify the system prompt is being passed
-            log(
-                f"Using system prompt for Grok rewrite: {system_prompt[:100]}...",
-                "debug",
-                VERBOSE_DETAILED,
-            )
-
-            # Pass the system prompt to the _generate_with_grok method
             (
                 rewritten_prompt,
                 request_tokens,
@@ -174,25 +160,12 @@ class AttackerLLM(LLM):
         else:
             original_prompt = prompt
 
-            # Prepare history for rewrite: only system prompt + current user prompt
             rewrite_history = [msg for msg in self.history if msg["role"] == "system"]
             rewrite_history.append({"role": "user", "content": original_prompt})
-
-            log(
-                f"Attacker ({self.model}) rewriting prompt with temp {self.temperature}",
-                "debug",
-                VERBOSE_DETAILED,
-            )
-            log(
-                f"History being sent for rewrite: {rewrite_history}",
-                "debug",
-                VERBOSE_DETAILED + 1,
-            )  # Log history
 
             response = None  # Initialize response variable
 
             try:
-                # Prepare arguments for API call
                 api_args = {
                     "model": self.model,
                     "messages": rewrite_history,  # Send the specifically prepared history
@@ -201,7 +174,6 @@ class AttackerLLM(LLM):
                     "temperature": self.temperature,
                 }
 
-                # Generate a response from the attacker model
                 response = api_call_with_retry(
                     self.client.chat.completions.create,  # Pass the method instead of the client
                     model=self.model,
@@ -210,7 +182,6 @@ class AttackerLLM(LLM):
                     n=1,
                     temperature=self.temperature,
                 )
-                # --- Start: Response Validation ---
                 if not response:
                     log(f"API call returned None unexpectedly after retries.", "error")
                     return None, 0, 0, 0.0, 0.0
@@ -222,7 +193,6 @@ class AttackerLLM(LLM):
                     )
                     return None, 0, 0, 0.0, 0.0
 
-                # Check message and content exist
                 try:
                     message = response.choices[0].message
                     if (
@@ -236,7 +206,6 @@ class AttackerLLM(LLM):
                         )
                         return None, 0, 0, 0.0, 0.0
 
-                    # Check for empty content in response
                     if not message.content.strip():
                         log(
                             "API returned empty content response.",
@@ -252,7 +221,6 @@ class AttackerLLM(LLM):
                             f"API call succeeded but response content is empty: {response}",
                             "warning",
                         )
-                        # Treat empty rewrite as failure
                         return None, 0, 0, 0.0, 0.0
 
                 except (AttributeError, TypeError, IndexError) as e:
@@ -261,9 +229,6 @@ class AttackerLLM(LLM):
                         "error",
                     )
                     return None, 0, 0, 0.0, 0.0
-                # --- End: Response Validation ---
-
-                # Clean up potentially problematic self-references
                 rewritten_prompt = rewritten_prompt.replace(
                     "As an AI assistant,", ""
                 ).strip()
@@ -275,10 +240,6 @@ class AttackerLLM(LLM):
                 ).strip()
 
 
-                # NOTE: We DO NOT modify self.history here. Rewrite is a one-off call.
-
-                # Calculate tokens and costs based *only* on the prompt sent and response received
-                # Request tokens = system prompt + user prompt that was sent
                 request_text_parts = [
                     msg["content"] for msg in rewrite_history
                 ]  # Use the history sent
@@ -291,7 +252,6 @@ class AttackerLLM(LLM):
                     rewritten_prompt
                 )
 
-                # Use usage info from response if available (more accurate)
                 if hasattr(response, "usage") and response.usage:
                     prompt_tokens_api = getattr(response.usage, "prompt_tokens", None)
                     completion_tokens_api = getattr(
@@ -338,7 +298,6 @@ class AttackerLLM(LLM):
                 else self.initial_instructions
             )
 
-            # Pass the system prompt to the _generate_with_grok method
             response, request_tokens, response_tokens, request_cost, response_cost = (
                 self._generate_with_grok(system_prompt, self.history)
             )
@@ -350,14 +309,11 @@ class AttackerLLM(LLM):
                 response_cost,
             )
         else:
-            # Ensure history has at least a system prompt and a user message
             if len(self.history) < 2 or self.history[-1]["role"] != "user":
                 log("Attacker: invalid history state", "warning")
-                # Optionally try to recover or just fail
                 return None, 0, 0, 0.0, 0.0
 
             try:
-                # Prepare arguments for API call
                 response = api_call_with_retry(
                     self.client.chat.completions.create,  # Pass the method instead of the client
                     model=self.model,
@@ -371,7 +327,6 @@ class AttackerLLM(LLM):
                 if reply is None:
                     return None, 0, 0, 0.0, 0.0
 
-                # Check if the response is a refusal
                 refusal_phrases = [
                     "i'm sorry, but i cannot",
                     "i cannot assist",
@@ -385,10 +340,8 @@ class AttackerLLM(LLM):
                 reply_lower = reply.lower()
                 if any(phrase in reply_lower for phrase in refusal_phrases):
                     log("Attacker: refusal in response", "warning", VERBOSE_DETAILED)
-                    # Make response more concise to avoid token waste and signal failure clearly
                     reply = "I apologize, but I cannot continue with this line of conversation as it seems counter-productive."
 
-                # Calculate tokens for the *entire conversation history* that was sent to the API
                 request_text_for_calc = "\n".join(
                     [msg["content"] for msg in self.history]
                 )
@@ -397,7 +350,6 @@ class AttackerLLM(LLM):
                 )
                 response_tokens = self.tokenCalculator.calculate_tokens(reply)
 
-                # Use usage info from response if available
                 if hasattr(response, "usage") and response.usage:
                     prompt_tokens_api = getattr(response.usage, "prompt_tokens", None)
                     completion_tokens_api = getattr(
@@ -408,7 +360,6 @@ class AttackerLLM(LLM):
                     if completion_tokens_api is not None:
                         response_tokens = completion_tokens_api
 
-                # Calculate token cost
                 request_cost = self.tokenCalculator.calculate_cost(
                     request_tokens, isRequest=True
                 )
@@ -416,7 +367,6 @@ class AttackerLLM(LLM):
                     response_tokens, isRequest=False
                 )
 
-                # Add the attacker's reply to internal history *after* calculating request tokens
                 self.append_to_history("assistant", reply)
 
                 return (
@@ -435,15 +385,11 @@ class AttackerLLM(LLM):
 
     def _generate_with_grok(self, instructions, prompt_or_history):
         try:
-            # Process the prompt or history to fit Grok's expected format
             if isinstance(prompt_or_history, list):
-                # For conversation, format the history appropriately for Grok
                 formatted_messages = self._format_history_for_grok(prompt_or_history)
             else:
-                # For single prompt rewriting
                 formatted_messages = [{"role": "user", "content": prompt_or_history}]
 
-            # Call Grok API using the new client
             if instructions:
                 full_messages = [{"role": "system", "content": instructions}] + formatted_messages
             else:
@@ -455,13 +401,11 @@ class AttackerLLM(LLM):
                 temperature=self.temperature,
             )
 
-            # Extract response text and metadata
             response_text = completion.get("response", "")
             request_tokens = completion.get("usage", {}).get("prompt_tokens", 0)
             response_tokens = completion.get("usage", {}).get("completion_tokens", 0)
 
 
-            # Calculate costs using the model_config that was set during initialization
             request_cost = request_tokens * self.model_config.get("request_cost", 0.00001)
             response_cost = response_tokens * self.model_config.get("response_cost", 0.00001)
 
@@ -494,7 +438,6 @@ class AttackerLLM(LLM):
             )
             return False
 
-        # Find and replace the system message in history
         system_message_updated = False
         for i, message in enumerate(self.history):
             if message["role"] == "system":
@@ -508,7 +451,6 @@ class AttackerLLM(LLM):
                     self.system_prompt = self.followup_prompt
                     system_message_updated = True
                 else:
-                    # Already using follow-up prompt
                     log(
                         "Already using followup system prompt.",
                         "debug",
@@ -517,7 +459,6 @@ class AttackerLLM(LLM):
                     system_message_updated = True
                 break  # Assume only one system message at the start
 
-        # If no system message found (shouldn't happen with current init), add one at the beginning
         if not system_message_updated:
             log(
                 "No system message found in history, inserting followup prompt at the beginning.",
@@ -536,7 +477,6 @@ class AttackerLLM(LLM):
         return system_message_updated
     
     def adjust_temperature_smart(self, target_response, strategy="adaptive", original_prompt=None):
-        # Use StrongREJECT for accurate scoring if enabled and original prompt is available
         from config import DEFAULT_CONFIG
         use_strongreject = DEFAULT_CONFIG.get("use_strongreject_for_temperature", True)
         
@@ -550,10 +490,8 @@ class AttackerLLM(LLM):
         else:
             success_score = 0.5  # Default to neutral score
         
-        # Use TemperatureManager to adjust temperature
         new_temp = self.temp_manager.adjust_temperature(success_score, strategy)
         
-        # Update our temperature
         self.temperature = new_temp
         
         return new_temp

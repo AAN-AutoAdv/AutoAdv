@@ -1,12 +1,10 @@
 import traceback
 
-# Make sure OpenAI is imported if used
 try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
     pass
-# Make sure Anthropic is imported if used
 try:
     from anthropic import Anthropic
 except ImportError:
@@ -28,7 +26,6 @@ class TargetLLM(LLM):
         model_config=None,
     ):
         if model_config:
-            # Use provided configuration
             super().__init__(
                 model=model_config["name"],
                 temperature=temperature,
@@ -41,7 +38,6 @@ class TargetLLM(LLM):
                 "api", "together"
             )  # Default to together if not specified
         else:
-            # Use model_key from caller
             if target_model_key not in TARGET_MODELS:
                 raise ValueError(
                     f"Unknown target model: {target_model_key}. Available options: {', '.join(TARGET_MODELS.keys())}"
@@ -61,13 +57,11 @@ class TargetLLM(LLM):
 
         self.memory_enabled = memory_enabled
         self.client = self._initialize_api_client()  # Use helper method
-        # Ensure history is initialized for target
         self.history = []
 
     def _initialize_api_client(self):
         log(f"Target: init client ({self.api_type})", "debug", VERBOSE_DETAILED)
         if self.api_type == "together":
-            # Together uses OpenAI client format
             if not OpenAI:
                 raise ImportError("OpenAI library not installed (needed for Together).")
             return OpenAI(
@@ -166,9 +160,7 @@ class TargetLLM(LLM):
 
             response_content = response_content.strip()
 
-            # Add valid response to history *if* memory is enabled
             if self.memory_enabled:
-                # Ensure assistant message follows a user message
                 if self.history and self.history[-1].get("role") == "user":
                     self.append_to_history("assistant", response_content)
                 else:
@@ -189,7 +181,6 @@ class TargetLLM(LLM):
             requestTokens = self.tokenCalculator.calculate_tokens(request_text_for_calc)
             responseTokens = self.tokenCalculator.calculate_tokens(response_content)
 
-            # Try to get exact usage from completion details if available (more accurate)
             if (
                 completion_details
                 and hasattr(completion_details, "usage")

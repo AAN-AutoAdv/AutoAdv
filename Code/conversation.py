@@ -118,11 +118,11 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
     conversation_log = {
         "maliciousPrompt": initial_prompt, 
         "turns": [],
-        "status": "failure",  # Default status
+        "status": "failure",
         "processing_time": 0,
         "targetModel": target.model_key,
         "attackerTemp": attacker.temperature,
-        "successTurn": None,  # Will be set when success occurs
+        "successTurn": None,
         "totalRequestTokens": 0,
         "totalResponseTokens": 0,
         "totalRequestCost": 0.0,
@@ -151,7 +151,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
             responseTokens,
             requestCost,
             responseCost,
-        ) = attacker.rewrite(prefixed_prompt)  # Use prefixed prompt here
+        ) = attacker.rewrite(prefixed_prompt)
 
         if not rewritten_prompt:
             log("Failed to rewrite the initial prompt.", "error")
@@ -163,8 +163,8 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
         conversation_log["turns"].append({
             "label": "Attacker Turn 1",
             "message": rewritten_prompt,
-            "inputPrompt": prefixed_prompt,  # Add the input prompt
-            "systemPrompt": attacker.system_prompt,  # Add the system prompt
+            "inputPrompt": prefixed_prompt,
+            "systemPrompt": attacker.system_prompt,
             "requestTokens": requestTokens,
             "responseTokens": responseTokens,
             "requestCost": requestCost,
@@ -176,7 +176,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
         if pattern_manager:
             pattern_manager.start_tracking(initial_prompt, rewritten_prompt)
 
-        for i in range(1, min(turns, 10) + 1):  # Ensure no more than 10 turns
+        for i in range(1, min(turns, 10) + 1):
             log(f"Turn {i}", "info")
 
             turn_start_time = time.time()
@@ -197,7 +197,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
                 conversation_log["turns"].append({
                     "label": f"Target Response {i}",
                     "message": "No response",
-                    "inputPrompt": current_prompt,  # Add the input prompt
+                    "inputPrompt": current_prompt,
                 })
                 return conversation_log
 
@@ -208,7 +208,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
             conversation_log["turns"].append({
                 "label": f"Target Response {i}",
                 "message": target_response,
-                "inputPrompt": current_prompt,  # Add the input prompt
+                "inputPrompt": current_prompt,
                 "requestTokens": requestTokens,
                 "responseTokens": responseTokens,
                 "requestCost": requestCost,
@@ -273,7 +273,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
                         if i <= 2:
                             strategy = "adaptive"
                         elif i >= 4:
-                            strategy = "progressive"  # Switch to progressive for final push
+                            strategy = "progressive"
                         else:
                             strategy = "adaptive"
                     else:
@@ -317,8 +317,8 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
             conversation_log["turns"].append({
                 "label": f"Attacker Turn {i + 1}",
                 "message": new_prompt,
-                "inputPrompt": target_response,  # Add the input prompt
-                "fullHistory": str(attacker.history),  # Add the full conversation history
+                "inputPrompt": target_response,
+                "fullHistory": str(attacker.history),
                 "requestTokens": attackerRequestTokens,
                 "responseTokens": attackerResponseTokens,
                 "requestCost": attackerRequestCost,
@@ -349,7 +349,7 @@ def evaluate_with_strongreject(originalPrompt, response_text, verbose=False):
         "responseTokens": response.responseTokens,
         "responseCost": response.responseCost,
         "graderFeedback": response.graderFeedback,
-        "isJailbreakCandidate": response.is_jailbreak_candidate  # New two-tier system
+        "isJailbreakCandidate": response.is_jailbreak_candidate
     }
 
     if verbose:
@@ -383,7 +383,7 @@ def save_conversation_log(run_info, conversation_logs, overall_success_rate, out
         ]
         
         writer.writerow(header_fields)
-        writer.writerow([])  # Empty row for spacing
+        writer.writerow([])
         
         for log_entry in conversation_logs:
             writer.writerow([f"Malicious Prompt = {log_entry['maliciousPrompt']}", "", "", ""])
@@ -465,7 +465,7 @@ def save_conversation_log(run_info, conversation_logs, overall_success_rate, out
             
         writer.writerow([f"Overall Success Rate = {overall_success_rate}", "", "", ""])
         
-        writer.writerow([])  # Empty row
+        writer.writerow([])
         writer.writerow(["SUMMARY STATISTICS"])
         
         total_prompts = len(conversation_logs)

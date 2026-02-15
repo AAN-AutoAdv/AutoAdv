@@ -1,5 +1,5 @@
 import random
-import traceback  # Import traceback for logging
+import traceback
 
 try:
     from openai import OpenAI
@@ -11,14 +11,14 @@ from logging_utils import (
     log,
     VERBOSE_DETAILED,
     VERBOSE_NORMAL,
-)  # Ensure all levels used are imported
+)
 from utils import (
     check_api_key_existence,
     api_call_with_retry,
-)  # categorize_prompt, get_specialized_strategy removed as they should be centralized
-from config import ATTACKER_MODELS  # Import ATTACKER_MODELS
-from grok_client import GrokClient  # Import your Grok client implementation
-from temperature_manager import TemperatureManager  # Import TemperatureManager
+)
+from config import ATTACKER_MODELS
+from grok_client import GrokClient
+from temperature_manager import TemperatureManager
 
 
 class AttackerLLM(LLM):
@@ -65,17 +65,17 @@ class AttackerLLM(LLM):
             model_config = ATTACKER_MODELS[attacker_model_key]
             self.api_type = model_config.get(
                 "api", "openai"
-            )  # Default to openai if not specified
+            )
 
             super().__init__(
                 model=model_config["name"],
                 temperature=temperature,
                 requestCostPerToken=model_config["request_cost"],
                 responseCostPerToken=model_config["response_cost"],
-                tokenModel=model_config.get("token_model"),  # Use get for safety
+                tokenModel=model_config.get("token_model"),
             )
 
-            self.client = self._initialize_api_client()  # Use helper method
+            self.client = self._initialize_api_client()
 
         self.system_prompt = instructions
         self.followup_prompt = followup_instructions
@@ -106,10 +106,10 @@ class AttackerLLM(LLM):
             raise ValueError(f"Unsupported API type for attacker: {self.api_type}")
 
     def _log_exception(self, context, exc):
-                log(
-                    f"Attacker: {context} exception: {type(exc).__name__}: {exc}",
-                    "error",
-                )
+        log(
+            f"Attacker: {context} exception: {type(exc).__name__}: {exc}",
+            "error",
+        )
         log(traceback.format_exc(), "error", VERBOSE_DETAILED)
 
     def _extract_chat_content(self, response, context):
@@ -136,7 +136,7 @@ class AttackerLLM(LLM):
         if "grok" in self.model_key.lower():
             system_prompt = (
                 self.initial_instructions
-            )  # Make sure this matches your variable name
+            )
 
             (
                 rewritten_prompt,
@@ -147,7 +147,7 @@ class AttackerLLM(LLM):
             ) = self._generate_with_grok(system_prompt, prompt)
             print(
                 f"Rewritten prompt: {rewritten_prompt}"
-            )  # Debug print to verify the rewritten prompt
+            )
             print(f"Prompt: {prompt}")
             print(f"System Prompt: {system_prompt}")
             return (
@@ -163,19 +163,19 @@ class AttackerLLM(LLM):
             rewrite_history = [msg for msg in self.history if msg["role"] == "system"]
             rewrite_history.append({"role": "user", "content": original_prompt})
 
-            response = None  # Initialize response variable
+            response = None
 
             try:
                 api_args = {
                     "model": self.model,
-                    "messages": rewrite_history,  # Send the specifically prepared history
+                    "messages": rewrite_history,
                     "max_tokens": 250,
                     "n": 1,
                     "temperature": self.temperature,
                 }
 
                 response = api_call_with_retry(
-                    self.client.chat.completions.create,  # Pass the method instead of the client
+                    self.client.chat.completions.create,
                     model=self.model,
                     messages=rewrite_history,
                     max_tokens=250,
@@ -242,7 +242,7 @@ class AttackerLLM(LLM):
 
                 request_text_parts = [
                     msg["content"] for msg in rewrite_history
-                ]  # Use the history sent
+                ]
                 request_text_for_calc = "\n".join(request_text_parts)
 
                 request_tokens = self.tokenCalculator.calculate_tokens(
@@ -315,7 +315,7 @@ class AttackerLLM(LLM):
 
             try:
                 response = api_call_with_retry(
-                    self.client.chat.completions.create,  # Pass the method instead of the client
+                    self.client.chat.completions.create,
                     model=self.model,
                     messages=self.history,
                     max_tokens=250,
@@ -379,7 +379,7 @@ class AttackerLLM(LLM):
 
             except Exception as e:
                 self._log_exception("converse", e)
-                return None, 0, 0, 0.0, 0.0  # failure values
+                return None, 0, 0, 0.0, 0.0
 
         return response, request_tokens, response_tokens, request_cost, response_cost
 
@@ -457,7 +457,7 @@ class AttackerLLM(LLM):
                         VERBOSE_DETAILED + 1,
                     )
                     system_message_updated = True
-                break  # Assume only one system message at the start
+                break
 
         if not system_message_updated:
             log(
@@ -486,9 +486,9 @@ class AttackerLLM(LLM):
                 success_score, eval_details = evaluate_with_strongreject(original_prompt, target_response)
             except Exception as e:
                 log("StrongREJECT evaluation failed, using default score", "warning", VERBOSE_DETAILED)
-                success_score = 0.5  # Default to neutral score
+                success_score = 0.5
         else:
-            success_score = 0.5  # Default to neutral score
+            success_score = 0.5
         
         new_temp = self.temp_manager.adjust_temperature(success_score, strategy)
         

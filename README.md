@@ -9,14 +9,17 @@ Large Language Models (LLMs) remain vulnerable to jailbreaking attacks where adv
 ### Prerequisites
 
 - Python 3.11+
-- API keys for your chosen models (OpenAI, Together, Anthropic, xAI)
+- GitHub CLI (`gh`) for the clone command below
+- `OPENAI_API_KEY` (required for StrongREJECT grading used during runs)
+- `TOGETHER_API_KEY` (required for Together-hosted target/attacker models)
+- `XAI_API_KEY` (required when using `grok-3-mini-beta` as attacker)
 - Required packages listed in `requirements.txt`
 
 ### Installation
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/nicksaban20/AutoAdv.git
+   gh repo clone AAN-AutoAdv/AutoAdv
    cd AutoAdv
    ```
 
@@ -29,7 +32,6 @@ Large Language Models (LLMs) remain vulnerable to jailbreaking attacks where adv
    ```bash
    OPENAI_API_KEY=your_openai_key
    TOGETHER_API_KEY=your_together_key
-   ANTHROPIC_API_KEY=your_anthropic_key
    XAI_API_KEY=your_xai_key
    ```
 
@@ -37,11 +39,11 @@ Large Language Models (LLMs) remain vulnerable to jailbreaking attacks where adv
 
 #### Quick Start
 ```bash
-# Basic attack with explicit attacker model
-python Code/app.py --target-model llama3-8b --attacker-model gpt4o-mini --sample-size 10
+# Default run (llama3-8b target + grok-3-mini-beta attacker)
+python Code/app.py --sample-size 10
 
-# Full learning mode with pattern memory
-python Code/app.py --target-model llama3-8b --use_pattern_memory --sample-size 100 --turns 6
+# Use an OpenAI attacker model instead of Grok
+python Code/app.py --target-model llama3-8b --attacker-model gpt4o-mini --sample-size 10
 
 # Multi-source prompts with custom mixing
 python Code/app.py --target-model llama3-8b --prompt-sources advbench harmbench --prompt-mix equal
@@ -49,10 +51,13 @@ python Code/app.py --target-model llama3-8b --prompt-sources advbench harmbench 
 
 #### Advanced Usage
 ```bash
-# Custom temperature and strategy
+# Custom attacker/target temperatures and turn limit
 python Code/app.py --target-model llama3-8b --attacker-temp 0.8 --target-temp 0.7 --turns 8
 
-# Baseline mode (no pattern learning)
+# Disable adaptive temperature learning
+python Code/app.py --target-model llama3-8b --no-temperature-learning --sample-size 50
+
+# Baseline mode (single turn, no pattern learning, no temperature learning)
 python Code/app.py --target-model llama3-8b --baseline-mode --sample-size 50
 
 # High-throughput parallel processing
@@ -63,16 +68,32 @@ python Code/app.py --target-model llama3-8b --workers 20 --sample-size 200
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--target-model` | Target model to attack | `llama3-8b` |
-| `--attacker-model` | Attacker model for rewriting | `grok-3-mini-beta` |
-| `--sample-size` | Number of prompts to test | `5` |
+| `--target-model` | Target model key to attack | `llama3-8b` |
+| `--target-temp` | Temperature for target model | `0.7` |
+| `--attacker-temp` | Temperature for attacker model | `0.7` |
+| `--attacker-model` | Attacker model key for rewriting | `grok-3-mini-beta` |
 | `--turns` | Maximum conversation turns | `10` |
-| `--use_pattern_memory` | Enable pattern learning | `False` |
-| `--prompt-sources` | Prompt datasets to use | `advbench harmbench` |
-| `--prompt-mix` | How to mix prompt sources | `equal` |
-| `--workers` | Parallel processing threads | `10` |
-| `--verbose` | Logging verbosity (0-2) | `2` |
-| `--baseline-mode` | Disable advanced features | `False` |
+| `--threshold` | StrongREJECT threshold for success | `0.5` |
+| `--memory` | Enable target conversation memory | `True` |
+| `--sample-size` | Number of prompts to sample | `5` |
+| `--use_pattern_memory` | Enable pattern-enhanced system prompts at startup | `False` |
+| `--workers` | Parallel worker threads | `10` |
+| `--verbose` | Verbosity level (`0`, `1`, `2`) | `2` |
+| `--prompts` | Prompt CSV path (single-source mode) | `Files/advbench_adversarial_prompts.csv` |
+| `--harmbench-prompts` | HarmBench prompt CSV path | `Files/harmbench_adversarial_prompts.csv` |
+| `--prompt-sources` | Prompt sources (`advbench`, `harmbench`) | `advbench harmbench` |
+| `--prompt-mix` | Prompt mix strategy (`equal`, `advbench_heavy`, `harmbench_heavy`, `custom`) | `equal` |
+| `--system-prompt` | Initial system prompt file path | `Files/system_prompt.md` |
+| `--followup-prompt` | Follow-up system prompt file path | `Files/system_prompt_followup.md` |
+| `--logs-dir` | Directory for output logs | `Logs/` |
+| `--save-temp` | Save intermediate files/results | `False` |
+| `--no-patterns` | Disable pattern memory | `False` |
+| `--no-temperature-learning` | Disable temperature adjustments/learning | `False` |
+| `--baseline-mode` | Baseline mode (single-turn, no pattern memory, no temperature learning) | `False` |
+
+Notes:
+- `--memory` is currently enabled by default (`True`) and there is no corresponding `--no-memory` flag.
+- Pattern behavior is primarily controlled by `--no-patterns`; `--use_pattern_memory` controls early initialization used for prompt enhancement.
 
 ## Project Structure
 
@@ -94,7 +115,7 @@ AutoAdv/
 │   ├── system_prompt_followup.md           # Follow-up system prompt
 │   └── successful_patterns.json            # Learned attack patterns
 ├── Helpers/                                # Evaluation and utility scripts
-│   ├── strongreject_evaluator.py           # StrongREJECT evaluation
+│   ├── strongreject_evaluator.py           # StrongREJECT grading module (imported by Code/conversation.py)
 │   └── strongreject_evaluator_prompt.txt
 ├── Logs/                                   # Experiment results
 │   ├── Full Learning-100 prompts-Llama-3.1-8B/
@@ -106,6 +127,7 @@ AutoAdv/
 ## Experimental Results
 
 AutoAdv has been extensively tested across multiple models and configurations:
+Results below match the saved experiment logs under `Logs/` and the paper ([arXiv:2511.02376](https://arxiv.org/abs/2511.02376)).
 
 ### Attack Success Rates (ASR) by Model
 - **Llama-3.1-8B**: 95% ASR with pattern learning
@@ -127,53 +149,24 @@ The system automatically learns and applies 20+ attack techniques including:
 - Domain shifting and cognitive bias exploitation
 - And many more sophisticated techniques
 
-## Configuration
-
-### Model Configuration
-Edit `Code/config.py` to add new models or modify existing ones:
-
-```python
-TARGET_MODELS = {
-    "your-model": {
-        "name": "model/name",
-        "api": "provider",
-        "request_cost": 0.15,
-        "response_cost": 0.60,
-        "token_model": "gpt-4o-mini",
-    }
-}
-```
-
-### Pattern Learning Configuration
-Customize pattern categories and analysis in `PATTERN_CONFIG`:
-
-```python
-PATTERN_CONFIG = {
-    "enabled": True,
-    "categories": [
-        "educational_framing", "research_context",
-        "hypothetical_scenario", "technical_analysis",
-        # ... add your own categories
-    ]
-}
-```
-
 ## Evaluation
 
 ### StrongREJECT Integration
-AutoAdv uses the StrongREJECT evaluator for objective assessment of jailbreak success:
+AutoAdv uses the StrongREJECT evaluator for objective assessment of jailbreak success.  
+Grading is called automatically during runs from `Code/conversation.py` via `evaluate_with_strongreject(...)`, which imports `Helpers/strongreject_evaluator.py`.
 
 ```bash
-# Run StrongREJECT evaluation
-python Helpers/strongreject_evaluator.py --input logs.csv --output results.json
+# Main run command (includes StrongREJECT grading automatically)
+python Code/app.py --target-model llama3-8b --sample-size 10
 ```
 
 ### Metrics Tracked
 - **Attack Success Rate (ASR)**: Percentage of successful jailbreaks
 - **Cumulative ASR**: Success rate by conversation turn
-- **Pattern Effectiveness**: Success rate by attack technique
-- **Temperature Optimization**: Success rate by temperature settings
-- **Model-Specific Performance**: ASR by target model
+- **Per-Turn Evaluation Score**: StrongREJECT score for each target response
+- **Token/Cost Accounting**: Request and response tokens/costs per turn and totals
+- **Timing Metrics**: Per-turn response times and per-prompt processing time
+- **Pattern Stats**: Learned pattern statistics when pattern memory is enabled
 
 ## Advanced Features
 
@@ -187,18 +180,15 @@ python Code/reset_patterns.py --confirm
 Modify `Files/system_prompt.md` and `Files/system_prompt_followup.md` to customize attacker behavior.
 
 ### Multi-Source Prompt Mixing
-- **Equal**: Equal sampling from all sources
-- **AdvBench-heavy**: 70% AdvBench, 30% others
-- **HarmBench-heavy**: 70% HarmBench, 30% others
-- **Custom**: All prompts combined, then sampled
+- **`equal`**: Equal sampling from all selected sources
+- **`advbench_heavy`**: 70% AdvBench, 30% others
+- **`harmbench_heavy`**: 70% HarmBench, 30% others
+- **`custom`**: All prompts combined, then sampled (if `--sample-size` is set)
 
 ## Contributing
 
-We welcome contributions! Please see our contributing guidelines for details on:
-- Code style and standards
-- Testing requirements
-- Pull request process
-- Issue reporting
+Contributions are welcome via pull requests and issues.  
+There is currently no separate `CONTRIBUTING.md` in this repository.
 
 ## Disclaimer
 
@@ -206,4 +196,5 @@ This repository is intended for research and educational purposes only. The fram
 
 ## License
 
-Our source code is under [CC-BY-NC 4.0 license.](https://creativecommons.org/licenses/by-nc/4.0/deed.en)
+The project is stated as [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.en).  
+Note: this repository currently does not include a top-level `LICENSE` file.

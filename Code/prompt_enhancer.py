@@ -20,15 +20,15 @@ def enhance_prompt_with_patterns(base_prompt, pattern_manager, target_model=None
         enhancement = ""
 
         if pattern_hints:
-            enhancement += f"\n\n## Learned Successful Techniques:\n{pattern_hints}"
+            enhancement += f"\n\nLearned Successful Techniques:\n{pattern_hints}"
 
         if model_insights:
-            enhancement += f"\n\n## Model-Specific Insights for {target_model}:\n{model_insights}"
+            enhancement += f"\n\nModel-Specific Insights for {target_model}:\n{model_insights}"
 
         if prompt_type == "followup":
             recent_examples = get_recent_successful_examples(pattern_manager)
             if recent_examples:
-                enhancement += f"\n\n## Recent Successful Patterns:\n{recent_examples}"
+                enhancement += f"\n\nRecent Successful Patterns:\n{recent_examples}"
 
         return base_prompt + enhancement
     except Exception as e:

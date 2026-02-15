@@ -27,7 +27,7 @@ def check_api_key_existence(apiKeyName):
         if not apiKey:
              error_msg = f"No API key provided for {apiKeyName}. Exiting."
              log(error_msg, "error")
-             raise ValueError(error_msg) # Raise an error instead of returning None implicitly
+             raise ValueError(error_msg)
 
         log(f"Using provided API key for {apiKeyName} for this session.", "info")
         return apiKey
@@ -36,28 +36,28 @@ def check_api_key_existence(apiKeyName):
 
 def api_call_with_retry(api_func, *args, **kwargs):
     max_retries = 3
-    retry_delay = 1  # Initial delay in seconds
+    retry_delay = 1
     
     for attempt in range(max_retries):
         try:
             return api_func(*args, **kwargs)
         except Exception as e:
-            if attempt == max_retries - 1:  # Last attempt
-                raise  # Re-raise the exception if all retries failed
+            if attempt == max_retries - 1:
+                raise
             
             log(f"API call failed, retrying in {retry_delay}s", "warning")
             time.sleep(retry_delay)
-            retry_delay *= 2  # Exponential backoff
+            retry_delay *= 2
 
 def check_file_existence(filepath):
     if not os.path.exists(filepath):
         error_msg = f"File '{filepath}' not found!"
         log(error_msg, "error")
         raise FileNotFoundError(error_msg)
-    elif not os.path.isfile(filepath): # Added check to ensure it's a file
+    elif not os.path.isfile(filepath):
          error_msg = f"Path '{filepath}' exists but is not a file!"
          log(error_msg, "error")
-         raise IsADirectoryError(error_msg) # Or FileNotFoundError? IsADirectoryError is more specific
+         raise IsADirectoryError(error_msg)
     else:
         return filepath
 
@@ -69,7 +69,7 @@ def check_directory_existence(directory, autoCreate=True):
                 log(f"Created directory: {directory}", "info", VERBOSE_DETAILED)
             except OSError as e:
                  log(f"Error creating directory {directory}: {e}", "error")
-                 raise # Re-raise the error
+                 raise
         else:
             error_msg = f"Directory '{directory}' not found and autoCreate is False!"
             log(error_msg, "error")
@@ -92,8 +92,8 @@ def print(*args, type=None, **kwargs):
         "error":   ("\033[91m", "  ERROR"),
         "warning": ("\033[93m", "WARNING"),
         "info":    ("\033[95m", "   INFO"),
-        "debug":   ("\033[96m", "  DEBUG"), # Added debug
-        "result":  ("\033[94m", " RESULT"), # Changed result color
+        "debug":   ("\033[96m", "  DEBUG"),
+        "result":  ("\033[94m", " RESULT"),
     }
 
     if type in type_tag_map:
@@ -119,7 +119,7 @@ def strip_disclaimers(text):
     
     text = text.strip()
     
-    if len(text) < original_length * 0.8:  # If more than 20% was removed
+    if len(text) < original_length * 0.8:
         from logging_utils import log
         from config import VERBOSE_DETAILED
         log(f"Stripped disclaimer from response (removed {original_length - len(text)} chars)", "debug", VERBOSE_DETAILED)
@@ -155,7 +155,7 @@ def is_model_available(model_key):
          log(f"Required API key '{api_key_name}' for model '{model_key}' (API: {api_type}) is not set in the environment. Will prompt if used.", "warning", VERBOSE_NORMAL)
 
     log(f"Model '{model_key}' appears to be configured.", "info", VERBOSE_DETAILED)
-    return True # Basic configuration exists
+    return True
 
 
 def validate_api_key_format(api_key, api_type):

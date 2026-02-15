@@ -6,7 +6,6 @@ class LLM:
         self.temperature = temperature
         self.history = []
 
-        # model token costs
         self.tokenCalculator = TokenCalculator(
             requestCostPerToken, responseCostPerToken, tokenModel or model
         )

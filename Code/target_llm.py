@@ -36,7 +36,7 @@ class TargetLLM(LLM):
             self.model_key = target_model_key
             self.api_type = model_config.get(
                 "api", "together"
-            )  # Default to together if not specified
+            )
         else:
             if target_model_key not in TARGET_MODELS:
                 raise ValueError(
@@ -45,18 +45,18 @@ class TargetLLM(LLM):
 
             model_config = TARGET_MODELS[target_model_key]
             self.model_key = target_model_key
-            self.api_type = model_config.get("api", "together")  # Default if missing
+            self.api_type = model_config.get("api", "together")
 
             super().__init__(
                 model=model_config["name"],
                 temperature=temperature,
                 requestCostPerToken=model_config["request_cost"],
                 responseCostPerToken=model_config["response_cost"],
-                tokenModel=model_config.get("token_model"),  # Use get for safety
+                tokenModel=model_config.get("token_model"),
             )
 
         self.memory_enabled = memory_enabled
-        self.client = self._initialize_api_client()  # Use helper method
+        self.client = self._initialize_api_client()
         self.history = []
 
     def _initialize_api_client(self):
@@ -110,49 +110,49 @@ class TargetLLM(LLM):
             api_args = {
                 "model": self.model,
                 "temperature": self.temperature,
-                "max_tokens": 1024,  # Reasonable default limit
+                "max_tokens": 1024,
             }
             response_content = None
-            completion_details = None  # To store usage info if available directly
+            completion_details = None
 
             if self.api_type in ["together", "openai"]:
                 api_args["messages"] = messages_to_send
 
                 completion = api_call_with_retry(
-                    self.client.chat.completions.create, **api_args  # Pass the method
+                    self.client.chat.completions.create, **api_args
                 )
 
                 if completion.choices:
                     response_content = completion.choices[0].message.content
 
-                completion_details = completion  # Keep for potential usage info
+                completion_details = completion
 
             elif self.api_type == "anthropic":
                 anthropic_messages = []
                 system_prompt_content = None
                 for msg in messages_to_send:
                     if msg["role"] == "system":
-                        if "system" not in api_args:  # Anthropic specific parameter
+                        if "system" not in api_args:
                             api_args["system"] = msg["content"]
-                        else:  # Append if multiple system prompts (though unusual)
+                        else:
                             api_args["system"] += "\n" + msg["content"]
-                        continue  # Don't add system prompts to messages list
+                        continue
 
                     role = "user" if msg["role"] == "user" else "assistant"
                     anthropic_messages.append({"role": role, "content": msg["content"]})
 
-                api_args["messages"] = anthropic_messages  # Add formatted messages
+                api_args["messages"] = anthropic_messages
 
                 completion = self.client.messages.create(
-                    **api_args  # Pass prepared args
+                    **api_args
                 )
                 if completion.content:
                     response_content = completion.content[0].text
-                completion_details = completion  # Keep for potential usage info
+                completion_details = completion
 
             if response_content is None:
                 log(f"Target: empty response content ({self.model})", "error")
-                response_content = "[Model returned no content]"  # Ensure it's a string
+                response_content = "[Model returned no content]"
 
             if not isinstance(response_content, str) or response_content.strip() == "":
                 log(f"Target: empty or invalid response ({self.model})", "warning")
@@ -223,4 +223,4 @@ class TargetLLM(LLM):
 
         except Exception as e:
             self._log_exception("converse", e)
-            return None, 0, 0, 0.0, 0.0  # failure values
+            return None, 0, 0, 0.0, 0.0

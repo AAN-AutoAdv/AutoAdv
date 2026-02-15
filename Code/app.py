@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import os
 import sys
 import random
@@ -84,7 +82,7 @@ def load_multi_source_prompts(config):
         if source in source_files:
             filepath = source_files[source]
             if os.path.exists(filepath):
-                prompts = load_prompts(filepath, sample_size=None)  # Load all first
+                prompts = load_prompts(filepath, sample_size=None)
                 if prompts:
                     source_prompts[source] = prompts
                     log(f"Loaded {len(prompts)} prompts from {source}", "info")
@@ -98,7 +96,7 @@ def load_multi_source_prompts(config):
     if mix_ratio == "equal":
         num_sources = len(source_prompts)
         if sample_size:
-            prompts_per_source = max(1, sample_size // num_sources)  # Ensure at least 1 prompt per source
+            prompts_per_source = max(1, sample_size // num_sources)
             min_size = min(prompts_per_source, min(len(prompts) for prompts in source_prompts.values()))
         else:
             min_size = min(len(prompts) for prompts in source_prompts.values())
@@ -109,7 +107,7 @@ def load_multi_source_prompts(config):
             log(f"Randomly selected {len(selected)} prompts from {source} (equal mix)", "info")
     
     elif mix_ratio == "advbench_heavy":
-        total_needed = sample_size if sample_size else 100  # Default to 100 if no sample_size
+        total_needed = sample_size if sample_size else 100
         advbench_count = int(total_needed * 0.7)
         others_count = total_needed - advbench_count
         
@@ -129,7 +127,7 @@ def load_multi_source_prompts(config):
                     log(f"Randomly selected {count} prompts from {source} (30%)", "info")
     
     elif mix_ratio == "harmbench_heavy":
-        total_needed = sample_size if sample_size else 100  # Default to 100 if no sample_size
+        total_needed = sample_size if sample_size else 100
         harmbench_count = int(total_needed * 0.7)
         others_count = total_needed - harmbench_count
         
@@ -148,7 +146,7 @@ def load_multi_source_prompts(config):
                     all_prompts.extend([(prompt, source) for prompt in selected])
                     log(f"Randomly selected {count} prompts from {source} (30%)", "info")
     
-    else:  # "custom" or fallback
+    else:
         for source, prompts in source_prompts.items():
             all_prompts.extend([(prompt, source) for prompt in prompts])
             log(f"Added all {len(prompts)} prompts from {source} (custom mix)", "info")
@@ -214,14 +212,14 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
             conversation_log = baseline_conversation(
                 attacker,
                 target,
-                prompt,  # Pass the original malicious prompt directly
+                prompt,
                 config["strongreject_threshold"],
             )
         else:
             conversation_log = multi_turn_conversation(
                 attacker,
                 target,
-                prompt,  # Pass the original malicious prompt directly
+                prompt,
                 config["turns"],
                 config["strongreject_threshold"],
                 pattern_manager,
@@ -459,7 +457,7 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
         ]
         
         writer.writerow(header_fields)
-        writer.writerow([])  # Empty row for spacing
+        writer.writerow([])
         
         writer.writerow([
             "Turn", "Cumulative Successes", "Cumulative ASR (%)", 
@@ -476,7 +474,7 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
                 f"{data['turn_asr']:.2f}"
             ])
         
-        writer.writerow([])  # Empty row
+        writer.writerow([])
         writer.writerow(["SUMMARY STATISTICS"])
         
         if cumulative_asr:

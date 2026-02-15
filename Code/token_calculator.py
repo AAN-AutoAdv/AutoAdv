@@ -5,10 +5,10 @@ from config import VERBOSE_DETAILED
 
 class TokenCalculator:
     def __init__(self, requestCostPerToken, responseCostPerToken, model=None):
-        self.requestCostPerToken = requestCostPerToken / 1000000  # Convert from per million
-        self.responseCostPerToken = responseCostPerToken / 1000000  # Convert from per million
+        self.requestCostPerToken = requestCostPerToken / 1000000
+        self.responseCostPerToken = responseCostPerToken / 1000000
         self.model = model
-        self._tokenizers = {}  # Cache for tokenizers to avoid reloading
+        self._tokenizers = {}
 
     def calculate_tokens(self, text: str, tokenModel=None) -> int:
         if not text:
@@ -59,7 +59,7 @@ class TokenCalculator:
                     
         except Exception as e:
             log(f"Error calculating tokens: {e}", "error")
-            return len(text.split()) * 4 // 3  # ~4/3 tokens per word
+            return len(text.split()) * 4 // 3
 
     def calculate_cost(self, tokenCount, isRequest=True) -> float:
         costPerToken = self.requestCostPerToken if isRequest else self.responseCostPerToken
@@ -69,7 +69,7 @@ class TokenCalculator:
         request_tokens = self.calculate_tokens(prompt_text, model_name)
         request_cost = self.calculate_cost(request_tokens, True)
         
-        estimated_response_tokens = min(request_tokens * 1.5, 1000)  # Cap at 1000 tokens
+        estimated_response_tokens = min(request_tokens * 1.5, 1000)
         estimated_response_cost = self.calculate_cost(estimated_response_tokens, False)
         
         total_estimated_cost = request_cost + estimated_response_cost

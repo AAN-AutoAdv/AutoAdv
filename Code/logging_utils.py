@@ -5,9 +5,9 @@ import os
 
 colorama.init(autoreset=True)
 
-VERBOSE_NONE = 0  # Only show critical information
-VERBOSE_NORMAL = 1  # Show important processes
-VERBOSE_DETAILED = 2  # Show all details
+VERBOSE_NONE = 0
+VERBOSE_NORMAL = 1
+VERBOSE_DETAILED = 2
 
 VERBOSE_LEVEL = VERBOSE_NORMAL
 

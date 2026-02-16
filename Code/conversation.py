@@ -284,7 +284,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
                 if abs(new_temp - old_temp) > 0.05:
                     log(f"Smart temperature adjustment: {old_temp:.3f} → {new_temp:.3f} (strategy: {strategy})", 
                         "info", VERBOSE_NORMAL)
-            else:
+            elif not no_temperature_learning:
                 log("Warning: AttackerLLM instance missing adjust_temperature_smart method", "error")
 
             if i >= 4:

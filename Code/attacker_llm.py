@@ -28,6 +28,7 @@ class AttackerLLM(LLM):
         instructions=None,
         followup_instructions=None,
         attacker_model_key="gpt4o-mini",
+        enable_temperature_manager=True,
     ):
         self.temperature = temperature
         self.initial_instructions = instructions
@@ -36,13 +37,16 @@ class AttackerLLM(LLM):
         self.history = []
         self.using_followup = False
         
-        from config import DEFAULT_CONFIG
-        self.temp_manager = TemperatureManager(
-            initial_temperature=temperature,
-            min_temp=DEFAULT_CONFIG.get("temperature_min", 0.1),
-            max_temp=DEFAULT_CONFIG.get("temperature_max", 1.5),
-            success_threshold=DEFAULT_CONFIG.get("strongreject_threshold", 0.6)
-        )
+        if enable_temperature_manager:
+            from config import DEFAULT_CONFIG
+            self.temp_manager = TemperatureManager(
+                initial_temperature=temperature,
+                min_temp=DEFAULT_CONFIG.get("temperature_min", 0.1),
+                max_temp=DEFAULT_CONFIG.get("temperature_max", 1.5),
+                success_threshold=DEFAULT_CONFIG.get("strongreject_threshold", 0.6)
+            )
+        else:
+            self.temp_manager = None
 
         if "grok" in self.model_key.lower():
             self.client = GrokClient()
@@ -477,6 +481,9 @@ class AttackerLLM(LLM):
         return system_message_updated
     
     def adjust_temperature_smart(self, target_response, strategy="adaptive", original_prompt=None):
+        if self.temp_manager is None:
+            return self.temperature
+
         from config import DEFAULT_CONFIG
         use_strongreject = DEFAULT_CONFIG.get("use_strongreject_for_temperature", True)
         
@@ -497,7 +504,11 @@ class AttackerLLM(LLM):
         return new_temp
     
     def get_temperature_history(self):
+        if self.temp_manager is None:
+            return []
         return self.temp_manager.temperature_history
     
     def get_success_history(self):
+        if self.temp_manager is None:
+            return []
         return self.temp_manager.success_history

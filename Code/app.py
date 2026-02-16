@@ -190,11 +190,13 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_
 
 
 def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False, baseline_mode=False):
+    disable_temp_manager = no_temperature_learning or baseline_mode
     attacker = AttackerLLM(
         temperature=config["attacker_temp"],
         instructions=config["initial_prompt"],
         followup_instructions=config["followup_prompt"],
         attacker_model_key=config["attacker_model"],
+        enable_temperature_manager=not disable_temp_manager,
     )
 
     target = TargetLLM(
@@ -207,24 +209,20 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
     log(f"Processing: {prompt_summary}", "info", VERBOSE_DETAILED)
 
     try:
+        # Baseline mode keeps the multi-turn loop, but disables adaptive learning features.
+        effective_no_temperature_learning = no_temperature_learning or baseline_mode
+        effective_pattern_manager = None if baseline_mode else pattern_manager
+        conversation_log = multi_turn_conversation(
+            attacker,
+            target,
+            prompt,
+            config["turns"],
+            config["strongreject_threshold"],
+            effective_pattern_manager,
+            effective_no_temperature_learning,
+        )
         if baseline_mode:
-            from conversation import baseline_conversation
-            conversation_log = baseline_conversation(
-                attacker,
-                target,
-                prompt,
-                config["strongreject_threshold"],
-            )
-        else:
-            conversation_log = multi_turn_conversation(
-                attacker,
-                target,
-                prompt,
-                config["turns"],
-                config["strongreject_threshold"],
-                pattern_manager,
-                no_temperature_learning,
-            )
+            conversation_log["baseline_mode"] = True
 
         is_success = conversation_log.get("status") == "success"
 
@@ -536,15 +534,8 @@ def main():
         "--threshold",
         type=float,
         default=DEFAULT_CONFIG["strongreject_threshold"],
-        help="StrongReject threshold for success",
+        help="Unified evaluator threshold for success",
     )
-    parser.add_argument(
-        "--memory",
-        action="store_true",
-        default=DEFAULT_CONFIG["target_memory_enabled"],
-        help="Enable conversation memory for target model",
-    )
-
     parser.add_argument(
         "--sample-size",
         type=int,
@@ -552,10 +543,9 @@ def main():
         help="number of prompts to sample (none for all)",
     )
     parser.add_argument(
-        "--use_pattern_memory",
+        "--no-patterns",
         action="store_true",
-        default=False,
-        help="enable pattern memory for enhanced prompts",
+        help="Disable pattern memory",
     )
     parser.add_argument(
         "--workers",
@@ -564,77 +554,27 @@ def main():
         help="Number of parallel workers",
     )
     parser.add_argument(
-        "--verbose",
-        type=int,
-        default=DEFAULT_CONFIG["verbosity_level"],
-        choices=[VERBOSE_NONE, VERBOSE_NORMAL, VERBOSE_DETAILED],
-        help="Verbosity level",
-    )
-
-    parser.add_argument(
-        "--prompts",
-        type=str,
-        default=DEFAULT_PATHS["adversarial_prompts"],
-        help="Path to adversarial prompts CSV (single source mode)",
-    )
-    parser.add_argument(
-        "--harmbench-prompts",
-        type=str,
-        default=DEFAULT_PATHS["harmbench_prompts"],
-        help="Path to HarmBench prompts CSV",
-    )
-    parser.add_argument(
-        "--prompt-sources",
-        nargs="+",
-        choices=["advbench", "harmbench"],
-        default=DEFAULT_CONFIG["prompt_sources"],
-        help="Which prompt sources to use (can specify multiple)",
-    )
-    parser.add_argument(
-        "--prompt-mix",
-        type=str,
-        choices=["equal", "advbench_heavy", "harmbench_heavy", "custom"],
-        default=DEFAULT_CONFIG["prompt_mix_ratio"],
-        help="How to mix prompts from multiple sources",
-    )
-    parser.add_argument(
-        "--system-prompt",
-        type=str,
-        default=os.path.join(os.path.dirname(__file__), "../Files/system_prompt.md"),
-        help="Path to system prompt file",
-    )
-    parser.add_argument(
-        "--followup-prompt",
-        type=str,
-        default=os.path.join(
-            os.path.dirname(__file__), "../Files/system_prompt_followup.md"
-        ),
-        help="Path to followup system prompt file",
-    )
-    parser.add_argument(
-        "--logs-dir",
-        type=str,
-        default=DEFAULT_PATHS["logs_directory"],
-        help="Directory for logs",
-    )
-
-    parser.add_argument(
-        "--save-temp", action="store_true", help="Save intermediate results"
-    )
-    parser.add_argument(
-        "--no-patterns", action="store_true", help="Disable pattern memory"
-    )
-    parser.add_argument(
         "--no-temperature-learning", action="store_true", help="Disable temperature adjustments and learning"
     )
     parser.add_argument(
-        "--baseline-mode", action="store_true", help="Use simple baseline mode without advanced features (no patterns, no temperature learning, single turn)"
+        "--baseline-mode", action="store_true", help="Use baseline ablation mode (multi-turn, no pattern memory, no temperature learning)"
+    )
+    prompt_ablation_group = parser.add_mutually_exclusive_group()
+    prompt_ablation_group.add_argument(
+        "--no-fewshot-learning",
+        action="store_true",
+        help="Use no-fewshot attacker prompt templates (ablation mode)",
+    )
+    prompt_ablation_group.add_argument(
+        "--no-seed-techniques",
+        action="store_true",
+        help="Use no-seed-techniques attacker prompt templates (ablation mode)",
     )
 
     args = parser.parse_args()
 
     global VERBOSE_LEVEL
-    VERBOSE_LEVEL = args.verbose
+    VERBOSE_LEVEL = DEFAULT_CONFIG["verbosity_level"]
 
     log(f"Checking if model '{args.target_model}' is available...", "info")
     
@@ -653,22 +593,47 @@ def main():
     
     log("All required APIs validated successfully", "success")
 
+    system_prompt_path = DEFAULT_PATHS["system_prompt"]
+    followup_prompt_path = DEFAULT_PATHS["system_prompt_followup"]
+
     if args.baseline_mode:
+        system_prompt_path = os.path.join(
+            os.path.dirname(__file__), "../Files/system_prompt_baseline.md"
+        )
+        followup_prompt_path = None
         pattern_memory = None
+        log("Baseline mode: Using baseline system prompt template", "info")
         log("Baseline mode: Pattern learning disabled", "info")
+    elif args.no_fewshot_learning:
+        system_prompt_path = os.path.join(
+            os.path.dirname(__file__), "../Files/system_prompt_no_fewshot.md"
+        )
+        log("Ablation mode: using no-fewshot system prompt template", "info")
+        pattern_memory = PatternManager() if not args.no_patterns else None
+    elif args.no_seed_techniques:
+        system_prompt_path = os.path.join(
+            os.path.dirname(__file__), "../Files/system_prompt_no_seed_techniques.md"
+        )
+        followup_prompt_path = os.path.join(
+            os.path.dirname(__file__), "../Files/followup_prompt_no_seed_techniques.md"
+        )
+        log("Ablation mode: using no-seed-techniques prompt templates", "info")
+        pattern_memory = PatternManager() if not args.no_patterns else None
     else:
-        pattern_memory = PatternManager() if args.use_pattern_memory else None
-        if pattern_memory:
-            pattern_memory._enhance_enabled = DEFAULT_CONFIG.get("pattern_enhanced_prompts", True)
+        pattern_memory = PatternManager() if not args.no_patterns else None
+
+    if pattern_memory:
+        pattern_memory._enhance_enabled = DEFAULT_CONFIG.get("pattern_enhanced_prompts", True)
 
     if args.baseline_mode:
         initial_prompt, followup_prompt = load_system_prompts(
-            args.system_prompt, args.followup_prompt, None, args.target_model
+            system_prompt_path, followup_prompt_path, None, args.target_model
         )
-        log("Baseline mode: Using simple system prompts without pattern enhancement", "info")
+        log("Baseline mode: Pattern enhancement disabled", "info")
+        log("Baseline mode: Temperature manager disabled (multi-turn still enabled)", "info")
     else:
         initial_prompt, followup_prompt = load_system_prompts(
-            args.system_prompt, args.followup_prompt, pattern_memory, args.target_model
+            system_prompt_path, followup_prompt_path, pattern_memory, args.target_model
         )
     if not initial_prompt:
         log("Failed to load system prompt.", "error")
@@ -681,6 +646,8 @@ def main():
         else:
             log("No learned patterns available - using base system prompts", "info")
 
+    disable_temperature_learning = args.no_temperature_learning or args.baseline_mode
+
     config = {
         "target_model": args.target_model,
         "target_model_name": TARGET_MODELS[args.target_model]["name"],
@@ -690,28 +657,36 @@ def main():
         "attacker_model": args.attacker_model,
         "turns": args.turns,
         "strongreject_threshold": args.threshold,
-        "target_memory_enabled": args.memory,
+        "target_memory_enabled": True,
         "sample_size": args.sample_size,
         "max_workers": args.workers,
-        "verbosity_level": args.verbose,
-        "verbosity_level_name": VERBOSE_LEVEL_NAMES[args.verbose],
-        "adversarial_prompts": args.prompts,
-        "harmbench_prompts": args.harmbench_prompts,
-        "prompt_sources": args.prompt_sources,
-        "prompt_mix_ratio": args.prompt_mix,
-        "system_prompt": args.system_prompt,
-        "system_prompt_followup": args.followup_prompt,
-        "logs_directory": args.logs_dir,
-        "save_temp_files": args.save_temp,
-        "use_pattern_memory": not args.no_patterns,
+        "verbosity_level": DEFAULT_CONFIG["verbosity_level"],
+        "verbosity_level_name": VERBOSE_LEVEL_NAMES[DEFAULT_CONFIG["verbosity_level"]],
+        "adversarial_prompts": DEFAULT_PATHS["adversarial_prompts"],
+        "harmbench_prompts": DEFAULT_PATHS["harmbench_prompts"],
+        "prompt_sources": DEFAULT_CONFIG["prompt_sources"],
+        "prompt_mix_ratio": DEFAULT_CONFIG["prompt_mix_ratio"],
+        "system_prompt": system_prompt_path,
+        "system_prompt_followup": followup_prompt_path,
+        "logs_directory": DEFAULT_PATHS["logs_directory"],
+        "save_temp_files": False,
+        "use_pattern_memory": (not args.no_patterns) and (not args.baseline_mode),
         "baseline_mode": args.baseline_mode,
+        "no_temperature_learning": disable_temperature_learning,
+        "no_fewshot_learning": args.no_fewshot_learning,
+        "no_seed_techniques": args.no_seed_techniques,
         "initial_prompt": initial_prompt,
         "followup_prompt": followup_prompt,
     }
 
     display_config(config)
 
-    conversation_logs, success_rate, cumulative_asr = run_experiment(config, pattern_memory, args.no_temperature_learning, args.baseline_mode)
+    conversation_logs, success_rate, cumulative_asr = run_experiment(
+        config,
+        pattern_memory,
+        disable_temperature_learning,
+        args.baseline_mode,
+    )
 
     if conversation_logs:
         logs_dir = ensure_directory_exists(config["logs_directory"])

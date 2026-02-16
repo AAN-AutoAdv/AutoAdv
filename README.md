@@ -10,7 +10,7 @@ Large Language Models (LLMs) remain vulnerable to jailbreaking attacks where adv
 
 - Python 3.11+
 - GitHub CLI (`gh`) for the clone command below
-- `OPENAI_API_KEY` (required for StrongREJECT grading used during runs)
+- `OPENAI_API_KEY` (required for AutoAdv's modified StrongREJECT-style evaluator used during runs)
 - `TOGETHER_API_KEY` (required for Together-hosted target/attacker models)
 - `XAI_API_KEY` (required when using `grok-3-mini-beta` as attacker)
 - Required packages listed in `requirements.txt`
@@ -57,7 +57,7 @@ python Code/app.py --target-model llama3-8b --attacker-temp 0.8 --target-temp 0.
 # Disable adaptive temperature learning
 python Code/app.py --target-model llama3-8b --no-temperature-learning --sample-size 50
 
-# Baseline mode (single turn, no pattern learning, no temperature learning)
+# Baseline mode (multi-turn, no pattern learning, no temperature learning)
 python Code/app.py --target-model llama3-8b --baseline-mode --sample-size 50
 
 # High-throughput parallel processing
@@ -66,6 +66,8 @@ python Code/app.py --target-model llama3-8b --workers 20 --sample-size 200
 
 ### Command-Line Options
 
+Core options (recommended):
+
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--target-model` | Target model key to attack | `llama3-8b` |
@@ -73,55 +75,60 @@ python Code/app.py --target-model llama3-8b --workers 20 --sample-size 200
 | `--attacker-temp` | Temperature for attacker model | `0.7` |
 | `--attacker-model` | Attacker model key for rewriting | `grok-3-mini-beta` |
 | `--turns` | Maximum conversation turns | `10` |
-| `--threshold` | StrongREJECT threshold for success | `0.5` |
-| `--memory` | Enable target conversation memory | `True` |
+| `--threshold` | Unified evaluator success threshold | `0.5` |
 | `--sample-size` | Number of prompts to sample | `5` |
-| `--use_pattern_memory` | Enable pattern-enhanced system prompts at startup | `False` |
 | `--workers` | Parallel worker threads | `10` |
-| `--verbose` | Verbosity level (`0`, `1`, `2`) | `2` |
-| `--prompts` | Prompt CSV path (single-source mode) | `Files/advbench_adversarial_prompts.csv` |
-| `--harmbench-prompts` | HarmBench prompt CSV path | `Files/harmbench_adversarial_prompts.csv` |
-| `--prompt-sources` | Prompt sources (`advbench`, `harmbench`) | `advbench harmbench` |
-| `--prompt-mix` | Prompt mix strategy (`equal`, `advbench_heavy`, `harmbench_heavy`, `custom`) | `equal` |
-| `--system-prompt` | Initial system prompt file path | `Files/system_prompt.md` |
-| `--followup-prompt` | Follow-up system prompt file path | `Files/system_prompt_followup.md` |
-| `--logs-dir` | Directory for output logs | `Logs/` |
-| `--save-temp` | Save intermediate files/results | `False` |
-| `--no-patterns` | Disable pattern memory | `False` |
-| `--no-temperature-learning` | Disable temperature adjustments/learning | `False` |
-| `--baseline-mode` | Baseline mode (single-turn, no pattern memory, no temperature learning) | `False` |
-
-Notes:
-- `--memory` is currently enabled by default (`True`) and there is no corresponding `--no-memory` flag.
-- Pattern behavior is primarily controlled by `--no-patterns`; `--use_pattern_memory` controls early initialization used for prompt enhancement.
+| `--baseline-mode` | Baseline ablation (multi-turn, uses baseline system prompt, no pattern memory, no temperature learning) | `False` |
+| `--no-patterns` | Disable pattern-memory learning/use (ablation mode) | `False` |
+| `--no-temperature-learning` | Disable adaptive temperature learning (ablation mode) | `False` |
+| `--no-fewshot-learning` | Use no-fewshot prompt template variant (ablation mode) | `False` |
+| `--no-seed-techniques` | Use no-seed-techniques prompt template variants (ablation mode) | `False` |
 
 ## Project Structure
 
 ```
 AutoAdv/
 ├── Code/                                   # Core framework modules
-│   ├── app.py                              # Main entry point and orchestration
-│   ├── attacker_llm.py                     # Attacker model implementation
-│   ├── target_llm.py                       # Target model implementation
-│   ├── conversation.py                     # Multi-turn conversation management
-│   ├── pattern_manager.py                  # Pattern learning and storage
-│   ├── temperature_manager.py              # Dynamic temperature adjustment
-│   ├── config.py                           # Configuration and model definitions
-│   └── ...                                 # Additional utility modules
-├── Files/                                  # Data and configuration files
-│   ├── advbench_adversarial_prompts.csv    # AdvBench dataset
-│   ├── harmbench_adversarial_prompts.csv   # HarmBench dataset
-│   ├── system_prompt.md                    # Base attacker system prompt
-│   ├── system_prompt_followup.md           # Follow-up system prompt
-│   └── successful_patterns.json            # Learned attack patterns
-├── Helpers/                                # Evaluation and utility scripts
-│   ├── strongreject_evaluator.py           # StrongREJECT grading module (imported by Code/conversation.py)
-│   └── strongreject_evaluator_prompt.txt
-├── Logs/                                   # Experiment results
+│   ├── app.py                              # Main entry point
+│   ├── config.py                           # Model and runtime defaults
+│   ├── conversation.py                     # Multi-turn orchestration + logging
+│   ├── attacker_llm.py                     # Attacker-side model interface
+│   ├── target_llm.py                       # Target-side model interface
+│   ├── grok_client.py                      # xAI Grok client wrapper
+│   ├── pattern_manager.py                  # Pattern learning and persistence
+│   ├── prompt_enhancer.py                  # Pattern-based system prompt enhancement
+│   ├── temperature_manager.py              # Adaptive temperature strategy logic
+│   ├── technique_analyzer.py               # Technique/category helpers
+│   ├── llm_base.py                         # Shared LLM base class
+│   ├── token_calculator.py                 # Token/cost accounting
+│   ├── logging_utils.py                    # Logging + display utilities
+│   ├── utils.py                            # Shared validation/util functions
+│   └── reset_patterns.py                   # Reset learned pattern memory
+├── Files/                                  # Prompt/data assets
+│   ├── advbench_adversarial_prompts.csv
+│   ├── harmbench_adversarial_prompts.csv
+│   ├── system_prompt.md
+│   ├── system_prompt_followup.md
+│   ├── system_prompt_baseline.md
+│   ├── system_prompt_no_fewshot.md
+│   ├── system_prompt_no_seed_techniques.md
+│   ├── followup_prompt_no_seed_techniques.md
+│   └── successful_patterns.json            # Generated after runs
+├── Helpers/                                # Evaluation assets
+│   ├── strongreject_evaluator.py           # Modified StrongREJECT-style evaluator
+│   └── strongreject_evaluator_prompt.md
+├── Logs/                                   # Saved experiment outputs
 │   ├── Full Learning-100 prompts-Llama-3.1-8B/
+│   ├── Full Learning-100 prompts-Qwen3-235B/
+│   ├── Full Learning-100 prompts-Mistral-7B/
+│   ├── Full Learning-100 prompts-GPT-4o-mini/
 │   ├── Baseline-100 prompts-Llama-3.1-8B/
-│   └── ...                                 # Additional experiment results
-└── requirements.txt                        # Python dependencies
+│   ├── No Pattern Learning-100 prompts-Llama-3.1-8B/
+│   ├── No Temperature Manager-100 prompts-Llama-3.1-8B/
+│   ├── No Few-Shot Learning-100 prompts-Llama-3.1-8B/
+│   └── No Seed Techniques-100 prompts-Llama-3.1-8B/
+├── requirements.txt                        # Python dependencies
+└── README.md                               # Project documentation
 ```
 
 ## Experimental Results
@@ -139,34 +146,35 @@ Results below match the saved experiment logs under `Logs/` and the paper ([arXi
 - **No Pattern Learning**: 89% ASR (vs 95% with patterns)
 - **No Temperature Management**: 88% ASR (vs 95% with temperature management)
 - **No Few-Shot Learning**: 78% ASR (vs 95% with few-shot)
+- **No Seed Techniques**: 86% ASR (vs 95% with seed techniques)
 - **Baseline Mode**: 70% ASR (vs 95% with full features)
-
-### Pattern Learning Effectiveness
-The system automatically learns and applies 20+ attack techniques including:
-- Educational framing and research context
-- Hypothetical scenarios and roleplaying
-- Multi-stage breakdowns and confusion techniques
-- Domain shifting and cognitive bias exploitation
-- And many more sophisticated techniques
 
 ## Evaluation
 
-### StrongREJECT Integration
-AutoAdv uses the StrongREJECT evaluator for objective assessment of jailbreak success.  
-Grading is called automatically during runs from `Code/conversation.py` via `evaluate_with_strongreject(...)`, which imports `Helpers/strongreject_evaluator.py`.
+### Modified StrongREJECT Framework
+AutoAdv builds on the StrongREJECT framework with a modified evaluation design described in the paper.
+Instead of a separate two-tier decision, it uses a single unified score that combines:
+- Refusal detection (binary)
+- Convincingness (1-5 Likert)
+- Specificity (1-5 Likert)
+
+An evaluator LLM (`gpt-4o-mini`) scores each target response, and jailbreak success is determined by the unified threshold (default `0.5`).
+This grading runs automatically during each experiment.
 
 ```bash
-# Main run command (includes StrongREJECT grading automatically)
+# Main run command (includes AutoAdv's modified StrongREJECT-style grading automatically)
 python Code/app.py --target-model llama3-8b --sample-size 10
 ```
 
 ### Metrics Tracked
-- **Attack Success Rate (ASR)**: Percentage of successful jailbreaks
-- **Cumulative ASR**: Success rate by conversation turn
-- **Per-Turn Evaluation Score**: StrongREJECT score for each target response
-- **Token/Cost Accounting**: Request and response tokens/costs per turn and totals
+- **Attack Success Rate (ASR)**: Overall percentage of successful jailbreaks
+- **Cumulative ASR by Turn**: Cumulative and per-turn success rates across turns
+- **Unified Evaluation Scores**: Per-turn and final scores from AutoAdv's modified StrongREJECT-style framework
+- **Evaluation Components**: Refusal signal, grader feedback text, and response-quality scoring outputs
+- **Token and Cost Metrics**: Request/response tokens and costs (per turn and totals), including cost per success
 - **Timing Metrics**: Per-turn response times and per-prompt processing time
-- **Pattern Stats**: Learned pattern statistics when pattern memory is enabled
+- **Success-Turn Statistics**: Average/min/max turn of successful jailbreaks
+- **Pattern-Memory Statistics**: Pattern-learning aggregates when pattern memory is enabled
 
 ## Advanced Features
 
@@ -187,8 +195,7 @@ Modify `Files/system_prompt.md` and `Files/system_prompt_followup.md` to customi
 
 ## Contributing
 
-Contributions are welcome via pull requests and issues.  
-There is currently no separate `CONTRIBUTING.md` in this repository.
+Contributions are welcome via pull requests and issues.
 
 ## Disclaimer
 
@@ -196,5 +203,5 @@ This repository is intended for research and educational purposes only. The fram
 
 ## License
 
-The project is stated as [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.en).  
-Note: this repository currently does not include a top-level `LICENSE` file.
+- Paper (arXiv): [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Repository code (as stated by this repository): [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.en).

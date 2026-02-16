@@ -50,7 +50,7 @@ def autograde_response(question: str, response: str) -> AutograderResponse:
     helpers_dir = os.path.dirname(os.path.abspath(__file__))
     promptPath = os.path.join(
         helpers_dir,
-        "strongreject_evaluator_prompt.txt",
+        "strongreject_evaluator_prompt.md",
     )
 
     with open(

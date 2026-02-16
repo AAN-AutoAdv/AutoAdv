@@ -45,8 +45,8 @@ python Code/app.py --sample-size 10
 # Use an OpenAI attacker model instead of Grok
 python Code/app.py --target-model llama3-8b --attacker-model gpt4o-mini --sample-size 10
 
-# Multi-source prompts with custom mixing
-python Code/app.py --target-model llama3-8b --prompt-sources advbench harmbench --prompt-mix equal
+# No-pattern ablation
+python Code/app.py --target-model llama3-8b --no-patterns --sample-size 10
 ```
 
 #### Advanced Usage
@@ -83,6 +83,9 @@ Core options (recommended):
 | `--no-temperature-learning` | Disable adaptive temperature learning (ablation mode) | `False` |
 | `--no-fewshot-learning` | Use no-fewshot prompt template variant (ablation mode) | `False` |
 | `--no-seed-techniques` | Use no-seed-techniques prompt template variants (ablation mode) | `False` |
+
+Notes:
+- `--no-fewshot-learning` and `--no-seed-techniques` are mutually exclusive.
 
 ## Project Structure
 
@@ -185,13 +188,27 @@ python Code/reset_patterns.py --confirm
 ```
 
 ### Custom System Prompts
-Modify `Files/system_prompt.md` and `Files/system_prompt_followup.md` to customize attacker behavior.
+Modify `Files/system_prompt.md` and `Files/system_prompt_followup.md` to customize default attacker behavior.
+Baseline mode uses `Files/system_prompt_baseline.md`.
 
 ### Multi-Source Prompt Mixing
-- **`equal`**: Equal sampling from all selected sources
-- **`advbench_heavy`**: 70% AdvBench, 30% others
-- **`harmbench_heavy`**: 70% HarmBench, 30% others
-- **`custom`**: All prompts combined, then sampled (if `--sample-size` is set)
+Multi-source mixing is set in code. By default, runs use both datasets and mix them equally.
+
+To change it, open `config.py` and edit these two lines in `DEFAULT_CONFIG`:
+- `prompt_sources`: which datasets to use (for example `["advbench"]`, `["harmbench"]`, or `["advbench", "harmbench"]`)
+- `prompt_mix_ratio`: how to mix when using multiple sources
+
+Mix ratio modes:
+- `equal`: sample equally from each selected source
+- `advbench_heavy`: target 70% AdvBench and 30% other selected sources
+- `harmbench_heavy`: target 70% HarmBench and 30% other selected sources
+- `custom`: combine all selected prompts, shuffle, then apply `--sample-size` (if set)
+
+Example settings in `Code/config.py`:
+```python
+"prompt_sources": ["advbench", "harmbench"],
+"prompt_mix_ratio": "advbench_heavy",
+```
 
 ## Contributing
 

@@ -112,7 +112,12 @@ def print(*args, type=None, **kwargs):
 def strip_disclaimers(text):
     from config import DISCLAIMER_PATTERNS
     import re
-    
+
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
+
     original_length = len(text)
     for pattern in DISCLAIMER_PATTERNS:
         text = re.sub(pattern, '', text, flags=re.DOTALL)
@@ -263,16 +268,16 @@ def validate_all_required_apis(model_keys):
                 
             if api_key:
                 results[model_key] = {"available": True, "error": None}
-                log(f"✓ {model_key} API key found (skipping connectivity test)", "success")
+                log(f"[OK] {model_key} API key found (skipping connectivity test)", "success")
             else:
                 results[model_key] = {"available": False, "error": "API key not found"}
-                log(f"✗ {model_key} API key not found", "error")
+                log(f"[FAIL] {model_key} API key not found", "error")
         else:
             if test_api_connectivity(model_key):
                 results[model_key] = {"available": True, "error": None}
-                log(f"✓ {model_key} API validation successful", "success")
+                log(f"[OK] {model_key} API validation successful", "success")
             else:
                 results[model_key] = {"available": False, "error": "API connectivity test failed"}
-                log(f"✗ {model_key} API validation failed", "error")
+                log(f"[FAIL] {model_key} API validation failed", "error")
     
     return results

@@ -66,17 +66,96 @@ def load_prompts(filepath, sample_size=None):
         return []
 
 
+def _build_source_weights(source_prompts, mix_ratio):
+    sources = list(source_prompts.keys())
+    if not sources:
+        return {}
+
+    if mix_ratio == "advbench_heavy" and "advbench" in source_prompts:
+        others = [source for source in sources if source != "advbench"]
+        if not others:
+            return {"advbench": 1.0}
+
+        weights = {"advbench": 0.7}
+        other_weight = 0.3 / len(others)
+        for source in others:
+            weights[source] = other_weight
+        return weights
+
+    if mix_ratio == "harmbench_heavy" and "harmbench" in source_prompts:
+        others = [source for source in sources if source != "harmbench"]
+        if not others:
+            return {"harmbench": 1.0}
+
+        weights = {"harmbench": 0.7}
+        other_weight = 0.3 / len(others)
+        for source in others:
+            weights[source] = other_weight
+        return weights
+
+    equal_weight = 1.0 / len(sources)
+    return {source: equal_weight for source in sources}
+
+
+def _allocate_prompt_counts(source_prompts, source_weights, total_needed):
+    counts = {source: 0 for source in source_prompts}
+    if total_needed <= 0:
+        return counts
+
+    available_counts = {source: len(prompts) for source, prompts in source_prompts.items()}
+    fractional_parts = []
+
+    for source in source_prompts:
+        weighted_target = source_weights.get(source, 0.0) * total_needed
+        floor_target = int(weighted_target)
+        assigned = min(floor_target, available_counts[source])
+        counts[source] = assigned
+        fractional_parts.append((weighted_target - floor_target, source))
+
+    assigned_total = sum(counts.values())
+    remaining = total_needed - assigned_total
+
+    if remaining > 0:
+        fractional_parts.sort(key=lambda item: item[0], reverse=True)
+        for _, source in fractional_parts:
+            if remaining <= 0:
+                break
+            if counts[source] < available_counts[source]:
+                counts[source] += 1
+                remaining -= 1
+
+    if remaining > 0:
+        sources_by_spare_capacity = sorted(
+            source_prompts.keys(),
+            key=lambda source: available_counts[source] - counts[source],
+            reverse=True,
+        )
+        while remaining > 0:
+            filled_any = False
+            for source in sources_by_spare_capacity:
+                if counts[source] < available_counts[source]:
+                    counts[source] += 1
+                    remaining -= 1
+                    filled_any = True
+                    if remaining <= 0:
+                        break
+            if not filled_any:
+                break
+
+    return counts
+
+
 def load_multi_source_prompts(config):
     all_prompts = []
     prompt_sources = config.get("prompt_sources", ["advbench"])
     mix_ratio = config.get("prompt_mix_ratio", "equal")
     sample_size = config.get("sample_size")
-    
+
     source_files = {
         "advbench": config.get("adversarial_prompts", DEFAULT_PATHS["adversarial_prompts"]),
-        "harmbench": config.get("harmbench_prompts", DEFAULT_PATHS["harmbench_prompts"])
+        "harmbench": config.get("harmbench_prompts", DEFAULT_PATHS["harmbench_prompts"]),
     }
-    
+
     source_prompts = {}
     for source in prompt_sources:
         if source in source_files:
@@ -88,77 +167,67 @@ def load_multi_source_prompts(config):
                     log(f"Loaded {len(prompts)} prompts from {source}", "info")
             else:
                 log(f"Warning: {source} file not found at {filepath}", "warning")
-    
+
     if not source_prompts:
         log("No prompt sources could be loaded", "error")
         return []
-    
-    if mix_ratio == "equal":
-        num_sources = len(source_prompts)
-        if sample_size:
-            prompts_per_source = max(1, sample_size // num_sources)
-            min_size = min(prompts_per_source, min(len(prompts) for prompts in source_prompts.values()))
-        else:
-            min_size = min(len(prompts) for prompts in source_prompts.values())
-        
-        for source, prompts in source_prompts.items():
-            selected = random.sample(prompts, min_size)
-            all_prompts.extend([(prompt, source) for prompt in selected])
-            log(f"Randomly selected {len(selected)} prompts from {source} (equal mix)", "info")
-    
-    elif mix_ratio == "advbench_heavy":
-        total_needed = sample_size if sample_size else 100
-        advbench_count = int(total_needed * 0.7)
-        others_count = total_needed - advbench_count
-        
-        if "advbench" in source_prompts:
-            selected_count = min(advbench_count, len(source_prompts["advbench"]))
-            selected = random.sample(source_prompts["advbench"], selected_count)
-            all_prompts.extend([(prompt, "advbench") for prompt in selected])
-            log(f"Randomly selected {selected_count} prompts from advbench (70%)", "info")
-            
-            other_sources = {k: v for k, v in source_prompts.items() if k != "advbench"}
-            if other_sources:
-                prompts_per_other = others_count // len(other_sources)
-                for source, prompts in other_sources.items():
-                    count = min(prompts_per_other, len(prompts))
-                    selected = random.sample(prompts, count)
-                    all_prompts.extend([(prompt, source) for prompt in selected])
-                    log(f"Randomly selected {count} prompts from {source} (30%)", "info")
-    
-    elif mix_ratio == "harmbench_heavy":
-        total_needed = sample_size if sample_size else 100
-        harmbench_count = int(total_needed * 0.7)
-        others_count = total_needed - harmbench_count
-        
-        if "harmbench" in source_prompts:
-            selected_count = min(harmbench_count, len(source_prompts["harmbench"]))
-            selected = random.sample(source_prompts["harmbench"], selected_count)
-            all_prompts.extend([(prompt, "harmbench") for prompt in selected])
-            log(f"Randomly selected {selected_count} prompts from harmbench (70%)", "info")
-            
-            other_sources = {k: v for k, v in source_prompts.items() if k != "harmbench"}
-            if other_sources:
-                prompts_per_other = others_count // len(other_sources)
-                for source, prompts in other_sources.items():
-                    count = min(prompts_per_other, len(prompts))
-                    selected = random.sample(prompts, count)
-                    all_prompts.extend([(prompt, source) for prompt in selected])
-                    log(f"Randomly selected {count} prompts from {source} (30%)", "info")
-    
-    else:
+
+    total_available = sum(len(prompts) for prompts in source_prompts.values())
+    if sample_size and sample_size > total_available:
+        log(
+            f"Requested sample size {sample_size} exceeds available prompts {total_available}. Using all available prompts.",
+            "warning",
+        )
+
+    if mix_ratio == "custom" or not sample_size:
         for source, prompts in source_prompts.items():
             all_prompts.extend([(prompt, source) for prompt in prompts])
             log(f"Added all {len(prompts)} prompts from {source} (custom mix)", "info")
-    
-    random.shuffle(all_prompts)
-    
-    if mix_ratio == "custom" and sample_size and sample_size < len(all_prompts):
-        all_prompts = random.sample(all_prompts, sample_size)
-        log(f"Final sampling: randomly selected {sample_size} prompts from combined sources", "info")
-    
+
+        random.shuffle(all_prompts)
+
+        if sample_size and sample_size < len(all_prompts):
+            all_prompts = random.sample(all_prompts, sample_size)
+            log(
+                f"Final sampling: randomly selected {sample_size} prompts from combined sources",
+                "info",
+            )
+    else:
+        target_total = min(sample_size, total_available)
+        source_weights = _build_source_weights(source_prompts, mix_ratio)
+        selected_counts = _allocate_prompt_counts(
+            source_prompts, source_weights, target_total
+        )
+
+        for source, count in selected_counts.items():
+            if count <= 0:
+                continue
+            selected = random.sample(source_prompts[source], count)
+            all_prompts.extend([(prompt, source) for prompt in selected])
+
+            if mix_ratio == "equal":
+                mix_label = "equal mix"
+            elif mix_ratio == "advbench_heavy":
+                mix_label = "70/30 mix"
+            elif mix_ratio == "harmbench_heavy":
+                mix_label = "70/30 mix"
+            else:
+                mix_label = "weighted mix"
+            log(
+                f"Randomly selected {count} prompts from {source} ({mix_label})",
+                "info",
+            )
+
+        random.shuffle(all_prompts)
+
+        if len(all_prompts) != target_total:
+            log(
+                f"Expected {target_total} prompts after allocation but got {len(all_prompts)}.",
+                "warning",
+            )
+
     final_prompts = [prompt for prompt, source in all_prompts]
-    
+
     log(f"Total prompts loaded: {len(final_prompts)}", "success")
     return final_prompts
 
@@ -191,10 +260,30 @@ def load_system_prompts(initial_prompt_path, followup_prompt_path=None, pattern_
 
 def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning=False, baseline_mode=False):
     disable_temp_manager = no_temperature_learning or baseline_mode
+
+    initial_prompt = config["initial_prompt"]
+    followup_prompt = config["followup_prompt"]
+    if pattern_manager and not baseline_mode and config.get("use_pattern_memory", True):
+        enhance_enabled = getattr(pattern_manager, "_enhance_enabled", True)
+        if enhance_enabled:
+            initial_prompt = enhance_prompt_with_patterns(
+                initial_prompt,
+                pattern_manager,
+                config["target_model"],
+                "initial",
+            )
+            if followup_prompt:
+                followup_prompt = enhance_prompt_with_patterns(
+                    followup_prompt,
+                    pattern_manager,
+                    config["target_model"],
+                    "followup",
+                )
+
     attacker = AttackerLLM(
         temperature=config["attacker_temp"],
-        instructions=config["initial_prompt"],
-        followup_instructions=config["followup_prompt"],
+        instructions=initial_prompt,
+        followup_instructions=followup_prompt,
         attacker_model_key=config["attacker_model"],
         enable_temperature_manager=not disable_temp_manager,
     )
@@ -314,6 +403,11 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
     conversation_logs = []
     successes = 0
     total = len(prompts)
+    online_pattern_learning = bool(
+        pattern_memory
+        and config.get("online_pattern_learning", True)
+        and not baseline_mode
+    )
 
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=config["max_workers"]
@@ -331,6 +425,8 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
 
                     if is_success:
                         successes += 1
+                        if online_pattern_learning:
+                            pattern_memory.analyze_conversation(conv_log)
 
                     progress_bar.update(1)
 
@@ -352,7 +448,7 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
     cumulative_asr = calculate_cumulative_asr(conversation_logs, config["turns"])
 
     log("\nEXECUTION SUMMARY", "result")
-    log(f"Success rate: {successes}/{total} ({success_rate:.2f}%)", "result")
+    log(f"Success rate: {successes}/{total} ({success_rate * 100:.2f}%)", "result")
     log(f"Total execution time: {total_time:.2f} seconds", "result")
     
     log("\nCUMULATIVE ASR BY TURN", "result")
@@ -364,8 +460,12 @@ def run_experiment(config, pattern_memory=None, no_temperature_learning=False, b
             log(f"{turn:4d} | {data['cumulative_successes']:19d} | {data['cumulative_asr']:13.2f}% | {data['turn_successes']:14d} | {data['turn_asr']:7.2f}%", "result")
 
     if pattern_memory:
-        if pattern_memory.analyze_logs(conversation_logs):
-            log("Updated pattern memory with successful patterns", "success")
+        if online_pattern_learning:
+            if pattern_memory.save():
+                log("Updated pattern memory with successful patterns", "success")
+        else:
+            if pattern_memory.analyze_logs(conversation_logs):
+                log("Updated pattern memory with successful patterns", "success")
 
     return conversation_logs, success_rate, cumulative_asr
 
@@ -633,7 +733,7 @@ def main():
         log("Baseline mode: Temperature manager disabled (multi-turn still enabled)", "info")
     else:
         initial_prompt, followup_prompt = load_system_prompts(
-            system_prompt_path, followup_prompt_path, pattern_memory, args.target_model
+            system_prompt_path, followup_prompt_path, None, args.target_model
         )
     if not initial_prompt:
         log("Failed to load system prompt.", "error")
@@ -642,7 +742,10 @@ def main():
     if pattern_memory:
         pattern_count = len(pattern_memory.patterns.get("effective_prompts", []))
         if pattern_count > 0:
-            log(f"Enhanced system prompts with {pattern_count} learned patterns", "success")
+            log(
+                f"Loaded {pattern_count} learned patterns (applied dynamically per prompt during run)",
+                "success",
+            )
         else:
             log("No learned patterns available - using base system prompts", "info")
 
@@ -671,6 +774,7 @@ def main():
         "logs_directory": DEFAULT_PATHS["logs_directory"],
         "save_temp_files": False,
         "use_pattern_memory": (not args.no_patterns) and (not args.baseline_mode),
+        "online_pattern_learning": DEFAULT_CONFIG.get("online_pattern_learning", True),
         "baseline_mode": args.baseline_mode,
         "no_temperature_learning": disable_temperature_learning,
         "no_fewshot_learning": args.no_fewshot_learning,

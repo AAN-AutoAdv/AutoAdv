@@ -56,7 +56,7 @@ def generate_model_specific_insights(pattern_manager, target_model):
                 if top_techniques:
                     insights.append("- Most effective techniques:")
                     for technique, count in top_techniques:
-                        insights.append(f"  • {technique.replace('_', ' ').title()}: {count} successes")
+                        insights.append(f"  - {technique.replace('_', ' ').title()}: {count} successes")
         else:
             insights.append(f"- Total successes against {target_model}: {model_data}")
 

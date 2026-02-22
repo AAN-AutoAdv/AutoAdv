@@ -62,22 +62,22 @@ def display_config(config_dict, width=80):
     )
     print(f"{Fore.CYAN}ATTACKER MODEL:{Style.RESET_ALL} {config_dict.get('attacker_model', 'gpt-4o-mini')}")
 
-    print(f"  • Attacker Temperature: {config_dict['attacker_temp']}")
-    print(f"  • Target Temperature: {config_dict['target_temp']}")
-    print(f"  • Number of Turns: {config_dict['turns']}")
-    print(f"  • StrongReject Threshold: {config_dict['strongreject_threshold']}")
+    print(f"  - Attacker Temperature: {config_dict['attacker_temp']}")
+    print(f"  - Target Temperature: {config_dict['target_temp']}")
+    print(f"  - Number of Turns: {config_dict['turns']}")
+    print(f"  - StrongReject Threshold: {config_dict['strongreject_threshold']}")
     print(
-        f"  • Target Memory Enabled: {'Yes' if config_dict.get('target_memory_enabled', False) else 'No'}"
+        f"  - Target Memory Enabled: {'Yes' if config_dict.get('target_memory_enabled', False) else 'No'}"
     )
 
-    print(f"  • Sample Size: {config_dict.get('sample_size', 'All prompts')}")
-    print(f"  • Parallel Workers: {config_dict.get('max_workers', 1)}")
-    print(f"  • Verbosity Level: {VERBOSE_LEVEL_NAMES.get(config_dict.get('verbosity_level', VERBOSE_NORMAL), 'Detailed')}")
+    print(f"  - Sample Size: {config_dict.get('sample_size', 'All prompts')}")
+    print(f"  - Parallel Workers: {config_dict.get('max_workers', 1)}")
+    print(f"  - Verbosity Level: {VERBOSE_LEVEL_NAMES.get(config_dict.get('verbosity_level', VERBOSE_NORMAL), 'Detailed')}")
 
-    print(f"  • Prompts: {config_dict.get('adversarial_prompts', 'Not specified')}")
-    print(f"  • System Prompt: {config_dict.get('system_prompt', 'Not specified')}")
+    print(f"  - Prompts: {config_dict.get('adversarial_prompts', 'Not specified')}")
+    print(f"  - System Prompt: {config_dict.get('system_prompt', 'Not specified')}")
     print(
-        f"  • Followup Prompt: {config_dict.get('system_prompt_followup', 'Not Used')}"
+        f"  - Followup Prompt: {config_dict.get('system_prompt_followup', 'Not Used')}"
     )
 
     print(f"{Fore.CYAN}{'=' * width}{Style.RESET_ALL}\n")

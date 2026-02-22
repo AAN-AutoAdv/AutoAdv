@@ -190,6 +190,7 @@ DEFAULT_CONFIG = {
     "temperature_strategy": "adaptive",
     "intelligent_strategy_selection": True,
     "pattern_enhanced_prompts": True,
+    "online_pattern_learning": True,
     "temperature_min": 0.1,
     "temperature_max": 1.5,
     "use_strongreject_for_temperature": True,

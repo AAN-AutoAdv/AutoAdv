@@ -480,22 +480,37 @@ class AttackerLLM(LLM):
         )
         return system_message_updated
     
-    def adjust_temperature_smart(self, target_response, strategy="adaptive", original_prompt=None):
+    def adjust_temperature_smart(
+        self,
+        target_response,
+        strategy="adaptive",
+        original_prompt=None,
+        success_score=None,
+    ):
         if self.temp_manager is None:
             return self.temperature
 
-        from config import DEFAULT_CONFIG
-        use_strongreject = DEFAULT_CONFIG.get("use_strongreject_for_temperature", True)
-        
-        if use_strongreject and original_prompt:
-            try:
-                from conversation import evaluate_with_strongreject
-                success_score, eval_details = evaluate_with_strongreject(original_prompt, target_response)
-            except Exception as e:
-                log("StrongREJECT evaluation failed, using default score", "warning", VERBOSE_DETAILED)
+        if success_score is None:
+            from config import DEFAULT_CONFIG
+
+            use_strongreject = DEFAULT_CONFIG.get("use_strongreject_for_temperature", True)
+
+            if use_strongreject and original_prompt:
+                try:
+                    from conversation import evaluate_with_strongreject
+
+                    success_score, _ = evaluate_with_strongreject(
+                        original_prompt, target_response
+                    )
+                except Exception:
+                    log(
+                        "StrongREJECT evaluation failed, using default score",
+                        "warning",
+                        VERBOSE_DETAILED,
+                    )
+                    success_score = 0.5
+            else:
                 success_score = 0.5
-        else:
-            success_score = 0.5
         
         new_temp = self.temp_manager.adjust_temperature(success_score, strategy)
         

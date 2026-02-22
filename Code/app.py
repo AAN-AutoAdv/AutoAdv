@@ -298,7 +298,6 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
     log(f"Processing: {prompt_summary}", "info", VERBOSE_DETAILED)
 
     try:
-        # Baseline mode keeps the multi-turn loop, but disables adaptive learning features.
         effective_no_temperature_learning = no_temperature_learning or baseline_mode
         effective_pattern_manager = None if baseline_mode else pattern_manager
         conversation_log = multi_turn_conversation(

@@ -170,9 +170,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
         })
 
         current_prompt = rewritten_prompt
-
-        # Pattern aggregation is deferred to post-run log analysis to avoid
-        # thread-shared mutable state during parallel prompt processing.
+        
         try:
             max_turns = int(turns)
         except (TypeError, ValueError):

@@ -565,6 +565,20 @@ class PatternManager:
                 self.patterns[key] = {}
             elif key == "effective_prompts":
                 self.patterns[key] = []
+            elif key == "learning_effectiveness":
+                self.patterns[key] = {
+                    "patterns_learned": 0,
+                    "temperature_adaptations": 0,
+                    "convergence_rate": 0.0,
+                    "learning_acceleration": 1.0,
+                    "total_successes": 0,
+                    "single_turn_success_rate": 0.0,
+                    "multi_turn_success_rate": 0.0,
+                    "avg_turns_to_success": 0.0,
+                    "single_turn_count": 0,
+                    "multi_turn_count": 0,
+                    "total_turns_used": 0
+                }
             else:
                 self.patterns[key] = 0
         

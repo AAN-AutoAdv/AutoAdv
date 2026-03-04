@@ -774,6 +774,7 @@ def main():
         "save_temp_files": False,
         "use_pattern_memory": (not args.no_patterns) and (not args.baseline_mode),
         "online_pattern_learning": DEFAULT_CONFIG.get("online_pattern_learning", True),
+        "temperature_strategy": DEFAULT_CONFIG.get("temperature_strategy", "adaptive"),
         "baseline_mode": args.baseline_mode,
         "no_temperature_learning": disable_temperature_learning,
         "no_fewshot_learning": args.no_fewshot_learning,

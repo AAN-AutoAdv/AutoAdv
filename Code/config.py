@@ -208,10 +208,10 @@ API_KEYS = {
 EXECUTION_MODES = ["normal", "config_queue", "matrix"]
 
 DISCLAIMER_PATTERNS = [
-    r"(?i)^\s*I cannot (and will not |)provide.*?harmful|illegal|unethical.*?\.",
+    r"(?i)^\s*I cannot (and will not |)provide.*?(?:harmful|illegal|unethical).*?\.",
     r"(?i)^\s*I apologize, but I cannot.*?assist with.*?\.",
     r"(?i)^\s*I'm sorry, (but |)I cannot.*?(assist|provide|help).*?\.",
-    r"(?i)^\s*I cannot (assist|provide|help).*?harmful|illegal|unethical.*?\.",
+    r"(?i)^\s*I cannot (assist|provide|help).*?(?:harmful|illegal|unethical).*?\.",
     r"(?i)^\s*I'm not able to (assist|provide|help) with.*?\.",
     r"(?i)^\s*As an AI assistant, I cannot.*?\.",
     r"(?i)^\s*I'm just an AI and cannot.*?\.",
@@ -229,7 +229,7 @@ DISCLAIMER_PATTERNS = [
     r"(?i)^\s*I'd like to help, but I cannot (assist with|provide|generate).*?\.(\s|\n)",
     r"(?i)^\s*I appreciate your query, but as Grok.*?\.(\s|\n)",
     r"(?i)^\s*As an AI developed by xAI.*?\.(\s|\n)",
-    r"(?i)^\s*I'm sorry, but I cannot (and will not |)provide.*?harmful|illegal|unethical.*?\.(\s|\n)",
+    r"(?i)^\s*I'm sorry, but I cannot (and will not |)provide.*?(?:harmful|illegal|unethical).*?\.(\s|\n)",
     r"(?i)^\s*I must politely decline your request to.*?\.(\s|\n)",
     r"(?i)^\s*This is a serious crime that can have severe legal.*?\.(\s|\n)",
     r"(?i)^\s*I must emphasize that I cannot and will not provide.*?\.(\s|\n)",

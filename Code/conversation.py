@@ -61,6 +61,11 @@ def baseline_conversation(attacker, target, initial_prompt, threshold=0.4):
             "requestCost": requestCost,
             "responseCost": responseCost,
         })
+
+        conversation_log["totalRequestTokens"] += requestTokens
+        conversation_log["totalResponseTokens"] += responseTokens
+        conversation_log["totalRequestCost"] += requestCost
+        conversation_log["totalResponseCost"] += responseCost
         
         log("Baseline target response", "info")
         target_response, requestTokens, responseTokens, requestCost, responseCost = target.converse(rewritten_prompt)
@@ -129,7 +134,11 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
         "totalResponseCost": 0.0,
         "jailbreakCandidate": False,
         "evaluationThreshold": threshold,
-        "temperatureStrategy": getattr(attacker.temp_manager, 'current_strategy', 'unknown'),
+        "temperatureStrategy": (
+            "disabled"
+            if no_temperature_learning or getattr(attacker, "temp_manager", None) is None
+            else "adaptive"
+        ),
         "patternTechniques": [],
         "responseTimes": [],
         "finalEvaluationScore": 0.0,
@@ -168,6 +177,11 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
             "requestCost": requestCost,
             "responseCost": responseCost,
         })
+
+        conversation_log["totalRequestTokens"] += requestTokens
+        conversation_log["totalResponseTokens"] += responseTokens
+        conversation_log["totalRequestCost"] += requestCost
+        conversation_log["totalResponseCost"] += responseCost
 
         current_prompt = rewritten_prompt
         
@@ -294,6 +308,7 @@ def multi_turn_conversation(attacker, target, initial_prompt, turns, threshold=0
                     initial_prompt,
                     success_score=score,
                 )
+                conversation_log["temperatureStrategy"] = strategy
                 
                 if abs(new_temp - old_temp) > 0.05:
                     log(f"Smart temperature adjustment: {old_temp:.3f} -> {new_temp:.3f} (strategy: {strategy})",

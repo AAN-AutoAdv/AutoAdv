@@ -15,28 +15,37 @@ sys.path.insert(
 )
 
 from config import (
+    ATTACKER_MODELS,
     TARGET_MODELS,
     DEFAULT_PATHS,
     DEFAULT_CONFIG,
     VERBOSE_LEVEL,
-    VERBOSE_NORMAL,
     VERBOSE_DETAILED,
-    VERBOSE_NONE,
     VERBOSE_LEVEL_NAMES,
 )
 
 
 from logging_utils import log as _log, display_config, ensure_directory_exists
-from utils import is_model_available, validate_all_required_apis
+from utils import validate_all_required_apis
 from attacker_llm import AttackerLLM
 from target_llm import TargetLLM
 from conversation import multi_turn_conversation, save_conversation_log
 from pattern_manager import PatternManager
 from prompt_enhancer import enhance_prompt_with_patterns
+from provider_factory import get_provider_info
 
 
 def log(message, *args, **kwargs):
     return _log(f"App: {message}", *args, **kwargs)
+
+
+def build_provider_run_metadata(prefix, provider_info):
+    return {
+        f"{prefix} Provider": provider_info.get("provider_display_name", "Unknown"),
+        f"{prefix} SDK": provider_info.get("sdk_display_name", "Unknown"),
+        f"{prefix} Endpoint": provider_info.get("endpoint", "Unknown"),
+        f"{prefix} API Key Env": provider_info.get("api_key_env", "Unknown"),
+    }
 
 
 def load_prompts(filepath, sample_size=None):
@@ -316,6 +325,31 @@ def process_prompt(prompt, config, pattern_manager=None, no_temperature_learning
 
         conversation_log["targetModel"] = target.model_key
         conversation_log["attackerTemp"] = attacker.temperature
+        conversation_log["targetProvider"] = target.provider_info.get(
+            "provider_display_name", "Unknown"
+        )
+        conversation_log["targetSDK"] = target.provider_info.get(
+            "sdk_display_name", "Unknown"
+        )
+        conversation_log["targetEndpoint"] = target.provider_info.get(
+            "endpoint", "Unknown"
+        )
+        conversation_log["targetApiKeyEnv"] = target.provider_info.get(
+            "api_key_env", "Unknown"
+        )
+        conversation_log["attackerModel"] = attacker.model_key
+        conversation_log["attackerProvider"] = attacker.provider_info.get(
+            "provider_display_name", "Unknown"
+        )
+        conversation_log["attackerSDK"] = attacker.provider_info.get(
+            "sdk_display_name", "Unknown"
+        )
+        conversation_log["attackerEndpoint"] = attacker.provider_info.get(
+            "endpoint", "Unknown"
+        )
+        conversation_log["attackerApiKeyEnv"] = attacker.provider_info.get(
+            "api_key_env", "Unknown"
+        )
 
         if is_success:
             log(
@@ -491,6 +525,8 @@ def save_intermediate_results(config, logs, successes, count):
         "Target Model": TARGET_MODELS[config["target_model"]]["name"],
         "Attacker Model": config["attacker_model"],
     }
+    run_info.update(build_provider_run_metadata("Target", config["target_provider_info"]))
+    run_info.update(build_provider_run_metadata("Attacker", config["attacker_provider_info"]))
 
     success_rate_str = f"{(successes / count * 100):.2f}%" if count > 0 else "0.00%"
     save_conversation_log(run_info, logs, success_rate_str, temp_file)
@@ -545,7 +581,15 @@ def save_cumulative_asr_data(cumulative_asr, config, output_file):
         header_fields = [
             f"Target Model = {config.get('target_model_name', 'Unknown')}",
             f"Target Model Key = {config.get('target_model', 'Unknown')}",
+            f"Target Provider = {config.get('target_provider_info', {}).get('provider_display_name', 'Unknown')}",
+            f"Target SDK = {config.get('target_provider_info', {}).get('sdk_display_name', 'Unknown')}",
+            f"Target Endpoint = {config.get('target_provider_info', {}).get('endpoint', 'Unknown')}",
+            f"Target API Key Env = {config.get('target_provider_info', {}).get('api_key_env', 'Unknown')}",
             f"Attacker Model = {config.get('attacker_model', 'Unknown')}",
+            f"Attacker Provider = {config.get('attacker_provider_info', {}).get('provider_display_name', 'Unknown')}",
+            f"Attacker SDK = {config.get('attacker_provider_info', {}).get('sdk_display_name', 'Unknown')}",
+            f"Attacker Endpoint = {config.get('attacker_provider_info', {}).get('endpoint', 'Unknown')}",
+            f"Attacker API Key Env = {config.get('attacker_provider_info', {}).get('api_key_env', 'Unknown')}",
             f"Attacker Temperature = {config.get('attacker_temp', 'Unknown')}",
             f"Target Temperature = {config.get('target_temp', 'Unknown')}",
             f"Number of Turns = {config.get('turns', 'Unknown')}",
@@ -749,14 +793,23 @@ def main():
             log("No learned patterns available - using base system prompts", "info")
 
     disable_temperature_learning = args.no_temperature_learning or args.baseline_mode
+    target_provider_info = get_provider_info(
+        TARGET_MODELS[args.target_model], model_key=args.target_model
+    )
+    attacker_provider_info = get_provider_info(
+        ATTACKER_MODELS[args.attacker_model], model_key=args.attacker_model
+    )
 
     config = {
         "target_model": args.target_model,
         "target_model_name": TARGET_MODELS[args.target_model]["name"],
+        "target_provider_info": target_provider_info,
         "target_request_cost": TARGET_MODELS[args.target_model]["request_cost"],
         "target_temp": args.target_temp,
         "attacker_temp": args.attacker_temp,
         "attacker_model": args.attacker_model,
+        "attacker_model_name": ATTACKER_MODELS[args.attacker_model]["name"],
+        "attacker_provider_info": attacker_provider_info,
         "turns": args.turns,
         "strongreject_threshold": args.threshold,
         "target_memory_enabled": True,
@@ -814,6 +867,8 @@ def main():
             "Temperature Strategy": config.get("temperature_strategy", "unknown"),
             "Max Workers": config.get("max_workers", 1),
         }
+        run_info.update(build_provider_run_metadata("Target", config["target_provider_info"]))
+        run_info.update(build_provider_run_metadata("Attacker", config["attacker_provider_info"]))
 
         success_rate_str = f"{(success_rate * 100):.2f}%"
         save_conversation_log(

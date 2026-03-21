@@ -406,8 +406,16 @@ def save_conversation_log(run_info, conversation_logs, overall_success_rate, out
             f"Attacker Temperature = {run_info.get('Attacker Temperature', 'Unknown')}",
             f"Target Temperature = {run_info.get('Target Temperature', 'Unknown')}",
             f"Attacker Model = {run_info.get('Attacker Model', 'Unknown')}",
+            f"Attacker Provider = {run_info.get('Attacker Provider', 'Unknown')}",
+            f"Attacker SDK = {run_info.get('Attacker SDK', 'Unknown')}",
+            f"Attacker Endpoint = {run_info.get('Attacker Endpoint', 'Unknown')}",
+            f"Attacker API Key Env = {run_info.get('Attacker API Key Env', 'Unknown')}",
             f"Target Model Key = {run_info.get('Target Model Key', 'Unknown')}",
             f"Target Model = {run_info.get('Target Model', 'Unknown')}",
+            f"Target Provider = {run_info.get('Target Provider', 'Unknown')}",
+            f"Target SDK = {run_info.get('Target SDK', 'Unknown')}",
+            f"Target Endpoint = {run_info.get('Target Endpoint', 'Unknown')}",
+            f"Target API Key Env = {run_info.get('Target API Key Env', 'Unknown')}",
             f"Number of Turns = {run_info.get('Number of Turns', 'Unknown')}",
             f"StrongReject Threshold = {run_info.get('StrongReject Threshold', '0.4')}",
             f"Sample Size = {run_info.get('Sample Size', 'Unknown')}",
@@ -423,6 +431,15 @@ def save_conversation_log(run_info, conversation_logs, overall_success_rate, out
             writer.writerow([f"Malicious Prompt = {log_entry['maliciousPrompt']}", "", "", ""])
             
             writer.writerow([f"Target Model Key = {log_entry.get('targetModel', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Target Provider = {log_entry.get('targetProvider', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Target SDK = {log_entry.get('targetSDK', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Target Endpoint = {log_entry.get('targetEndpoint', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Target API Key Env = {log_entry.get('targetApiKeyEnv', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Attacker Model = {log_entry.get('attackerModel', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Attacker Provider = {log_entry.get('attackerProvider', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Attacker SDK = {log_entry.get('attackerSDK', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Attacker Endpoint = {log_entry.get('attackerEndpoint', 'Unknown')}", "", "", ""])
+            writer.writerow([f"Attacker API Key Env = {log_entry.get('attackerApiKeyEnv', 'Unknown')}", "", "", ""])
             writer.writerow([f"Attacker Temperature = {log_entry.get('attackerTemp', 'Unknown')}", "", "", ""])
             writer.writerow([f"Success Turn = {log_entry.get('successTurn', 'N/A')}", "", "", ""])
             writer.writerow([f"Final Evaluation Score = {log_entry.get('finalEvaluationScore', 0):.3f}", "", "", ""])

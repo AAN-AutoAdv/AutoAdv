@@ -1,85 +1,59 @@
 import traceback
 
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-    pass
-try:
-    from anthropic import Anthropic
-except ImportError:
-    Anthropic = None
-    pass
-
 from llm_base import LLM
 from utils import check_api_key_existence, api_call_with_retry
 from logging_utils import log
 from config import TARGET_MODELS, VERBOSE_DETAILED
+from provider_factory import (
+    build_provider_client,
+    format_provider_summary,
+)
 
 
 class TargetLLM(LLM):
     def __init__(
         self,
         temperature,
-        target_model_key="llama3-8b",
+        target_model_key="gpt4o-mini",
         memory_enabled=False,
         model_config=None,
     ):
-        if model_config:
-            super().__init__(
-                model=model_config["name"],
-                temperature=temperature,
-                requestCostPerToken=model_config["request_cost"],
-                responseCostPerToken=model_config["response_cost"],
-                tokenModel=model_config.get("token_model"),
-            )
-            self.model_key = target_model_key
-            self.api_type = model_config.get(
-                "api", "together"
-            )
-        else:
+        if not model_config:
             if target_model_key not in TARGET_MODELS:
                 raise ValueError(
                     f"Unknown target model: {target_model_key}. Available options: {', '.join(TARGET_MODELS.keys())}"
                 )
-
             model_config = TARGET_MODELS[target_model_key]
-            self.model_key = target_model_key
-            self.api_type = model_config.get("api", "together")
 
-            super().__init__(
-                model=model_config["name"],
-                temperature=temperature,
-                requestCostPerToken=model_config["request_cost"],
-                responseCostPerToken=model_config["response_cost"],
-                tokenModel=model_config.get("token_model"),
-            )
+        self.model_key = target_model_key
+        self.model_config = model_config
+
+        super().__init__(
+            model=model_config["name"],
+            temperature=temperature,
+            requestCostPerToken=model_config["request_cost"],
+            responseCostPerToken=model_config["response_cost"],
+            tokenModel=model_config.get("token_model"),
+        )
 
         self.memory_enabled = memory_enabled
         self.client = self._initialize_api_client()
         self.history = []
 
     def _initialize_api_client(self):
-        log(f"Target: init client ({self.api_type})", "debug", VERBOSE_DETAILED)
-        if self.api_type == "together":
-            if not OpenAI:
-                raise ImportError("OpenAI library not installed (needed for Together).")
-            return OpenAI(
-                api_key=check_api_key_existence("TOGETHER_API_KEY"),
-                base_url="https://api.together.xyz/v1",
-            )
-        elif self.api_type == "openai":
-            if not OpenAI:
-                raise ImportError("OpenAI library not installed.")
-            return OpenAI(api_key=check_api_key_existence("OPENAI_API_KEY"))
-        elif self.api_type == "anthropic":
-            if not Anthropic:
-                raise ImportError(
-                    "Anthropic library not installed. pip install anthropic"
-                )
-            return Anthropic(api_key=check_api_key_existence("ANTHROPIC_API_KEY"))
-        else:
-            raise ValueError(f"Unsupported API type for target: {self.api_type}")
+        client, provider_info = build_provider_client(
+            self.model_config,
+            model_key=self.model_key,
+            api_key_resolver=check_api_key_existence,
+        )
+        self.provider_info = provider_info
+        self.provider = provider_info["provider"]
+        log(
+            f"Target client initialized for {self.model_key}. {format_provider_summary(provider_info)}",
+            "debug",
+            VERBOSE_DETAILED,
+        )
+        return client
 
     def _log_exception(self, context, exc):
         log(
@@ -115,7 +89,7 @@ class TargetLLM(LLM):
             response_content = None
             completion_details = None
 
-            if self.api_type in ["together", "openai"]:
+            if self.provider_info["compat_mode"] == "openai_compatible":
                 api_args["messages"] = messages_to_send
 
                 completion = api_call_with_retry(
@@ -127,9 +101,8 @@ class TargetLLM(LLM):
 
                 completion_details = completion
 
-            elif self.api_type == "anthropic":
+            elif self.provider == "anthropic":
                 anthropic_messages = []
-                system_prompt_content = None
                 for msg in messages_to_send:
                     if msg["role"] == "system":
                         if "system" not in api_args:
@@ -167,7 +140,7 @@ class TargetLLM(LLM):
                     log("Target: history state prevents assistant append", "warning", VERBOSE_DETAILED)
 
             request_text_for_calc = ""
-            if self.api_type == "anthropic" and "system" in api_args:
+            if self.provider == "anthropic" and "system" in api_args:
                 request_text_for_calc = (
                     api_args["system"]
                     + "\n"

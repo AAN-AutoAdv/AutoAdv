@@ -52,15 +52,33 @@ def print_header(title, width=60):
 def print_section(title, width=60):
     print(f"\n{Fore.CYAN}{title}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'-' * width}{Style.RESET_ALL}")
+
+
+def _display_provider_details(label, model_key, model_name, provider_info):
+    print(f"{Fore.CYAN}{label}:{Style.RESET_ALL} {model_key} - {model_name}")
+    if not provider_info:
+        return
+
+    print(f"  - Provider: {provider_info.get('provider_display_name', 'Unknown')}")
+    print(f"  - SDK: {provider_info.get('sdk_display_name', 'Unknown')}")
+    print(f"  - Endpoint: {provider_info.get('endpoint', 'Unknown')}")
+    print(f"  - API Key Env: {provider_info.get('api_key_env', 'Unknown')}")
     
 def display_config(config_dict, width=80):
     print_header("CONFIGURATION", width)
 
-    print(
-        f"{Fore.CYAN}TARGET MODEL:{Style.RESET_ALL} {config_dict['target_model']} - "
-        f"{config_dict.get('target_model_name', 'Unknown')}"
+    _display_provider_details(
+        "TARGET MODEL",
+        config_dict["target_model"],
+        config_dict.get("target_model_name", "Unknown"),
+        config_dict.get("target_provider_info"),
     )
-    print(f"{Fore.CYAN}ATTACKER MODEL:{Style.RESET_ALL} {config_dict.get('attacker_model', 'gpt-4o-mini')}")
+    _display_provider_details(
+        "ATTACKER MODEL",
+        config_dict.get("attacker_model", "gpt-4o-mini"),
+        config_dict.get("attacker_model_name", "Unknown"),
+        config_dict.get("attacker_provider_info"),
+    )
 
     print(f"  - Attacker Temperature: {config_dict['attacker_temp']}")
     print(f"  - Target Temperature: {config_dict['target_temp']}")

@@ -1,11 +1,6 @@
 import random
 import traceback
 
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-    pass
 from llm_base import LLM
 from logging_utils import (
     log,
@@ -17,8 +12,9 @@ from utils import (
     api_call_with_retry,
 )
 from config import ATTACKER_MODELS
-from grok_client import GrokClient
+from provider_factory import build_provider_client, format_provider_summary, get_provider_info
 from temperature_manager import TemperatureManager
+from xai_client import XAIChatClient
 
 
 class AttackerLLM(LLM):
@@ -48,37 +44,31 @@ class AttackerLLM(LLM):
         else:
             self.temp_manager = None
 
-        if "grok" in self.model_key.lower():
-            self.client = GrokClient()
-            self.model_config = ATTACKER_MODELS.get(
-                self.model_key,
-                {
-                    "name": "Grok Model",
-                    "request_cost": 0.00001,
-                    "response_cost": 0.00001,
-                    "token_limit": 4096,
-                    "provider": "xai",
-                },
+        if attacker_model_key not in ATTACKER_MODELS:
+            raise ValueError(
+                f"Unknown attacker model: {attacker_model_key}. Available options: {', '.join(ATTACKER_MODELS.keys())}"
             )
+
+        self.model_config = ATTACKER_MODELS[attacker_model_key]
+        self.provider_info = get_provider_info(
+            self.model_config, model_key=self.model_key
+        )
+        self.provider = self.provider_info["provider"]
+
+        super().__init__(
+            model=self.model_config["name"],
+            temperature=temperature,
+            requestCostPerToken=self.model_config["request_cost"],
+            responseCostPerToken=self.model_config["response_cost"],
+            tokenModel=self.model_config.get("token_model"),
+        )
+
+        if self.provider == "xai":
+            self.client = XAIChatClient(
+                model_config=self.model_config, model_key=self.model_key
+            )
+            self.provider_info = self.client.provider_info
         else:
-            if attacker_model_key not in ATTACKER_MODELS:
-                raise ValueError(
-                    f"Unknown attacker model: {attacker_model_key}. Available options: {', '.join(ATTACKER_MODELS.keys())}"
-                )
-
-            model_config = ATTACKER_MODELS[attacker_model_key]
-            self.api_type = model_config.get(
-                "api", "openai"
-            )
-
-            super().__init__(
-                model=model_config["name"],
-                temperature=temperature,
-                requestCostPerToken=model_config["request_cost"],
-                responseCostPerToken=model_config["response_cost"],
-                tokenModel=model_config.get("token_model"),
-            )
-
             self.client = self._initialize_api_client()
 
         self.system_prompt = instructions
@@ -90,24 +80,19 @@ class AttackerLLM(LLM):
 
 
     def _initialize_api_client(self):
+        client, provider_info = build_provider_client(
+            self.model_config,
+            model_key=self.model_key,
+            api_key_resolver=check_api_key_existence,
+        )
+        self.provider_info = provider_info
+        self.provider = provider_info["provider"]
         log(
-            f"Initializing attacker client for API type: {self.api_type}",
+            f"Attacker client initialized for {self.model_key}. {format_provider_summary(provider_info)}",
             "debug",
             VERBOSE_DETAILED,
         )
-        if self.api_type == "openai":
-            if not OpenAI:
-                raise ImportError("OpenAI library not installed.")
-            return OpenAI(api_key=check_api_key_existence("OPENAI_API_KEY"))
-        elif self.api_type == "together":
-            if not OpenAI:
-                raise ImportError("OpenAI library not installed (needed for Together).")
-            return OpenAI(
-                api_key=check_api_key_existence("TOGETHER_API_KEY"),
-                base_url="https://api.together.xyz/v1",
-            )
-        else:
-            raise ValueError(f"Unsupported API type for attacker: {self.api_type}")
+        return client
 
     def _log_exception(self, context, exc):
         log(
@@ -137,7 +122,7 @@ class AttackerLLM(LLM):
             return None
 
     def rewrite(self, prompt):
-        if "grok" in self.model_key.lower():
+        if self.provider == "xai":
             system_prompt = (
                 self.initial_instructions
             )
@@ -148,7 +133,7 @@ class AttackerLLM(LLM):
                 response_tokens,
                 request_cost,
                 response_cost,
-            ) = self._generate_with_grok(system_prompt, prompt)
+            ) = self._generate_with_xai(system_prompt, prompt)
             print(
                 f"Rewritten prompt: {rewritten_prompt}"
             )
@@ -295,7 +280,7 @@ class AttackerLLM(LLM):
         )
 
     def converse(self):
-        if "grok" in self.model_key.lower():
+        if self.provider == "xai":
             system_prompt = (
                 self.followup_instructions
                 if self.using_followup
@@ -303,7 +288,7 @@ class AttackerLLM(LLM):
             )
 
             response, request_tokens, response_tokens, request_cost, response_cost = (
-                self._generate_with_grok(system_prompt, self.history)
+                self._generate_with_xai(system_prompt, self.history)
             )
             return (
                 response,
@@ -387,10 +372,10 @@ class AttackerLLM(LLM):
 
         return response, request_tokens, response_tokens, request_cost, response_cost
 
-    def _generate_with_grok(self, instructions, prompt_or_history):
+    def _generate_with_xai(self, instructions, prompt_or_history):
         try:
             if isinstance(prompt_or_history, list):
-                formatted_messages = self._format_history_for_grok(prompt_or_history)
+                formatted_messages = self._format_history_for_xai(prompt_or_history)
             else:
                 formatted_messages = [{"role": "user", "content": prompt_or_history}]
 
@@ -422,10 +407,10 @@ class AttackerLLM(LLM):
             )
 
         except Exception as e:
-            self._log_exception("grok_generate", e)
+            self._log_exception("xai_generate", e)
             return "", 0, 0, 0, 0
 
-    def _format_history_for_grok(self, history):
+    def _format_history_for_xai(self, history):
         formatted_messages = []
         for message in history:
             formatted_messages.append(

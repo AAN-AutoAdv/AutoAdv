@@ -35,33 +35,80 @@ Large Language Models (LLMs) remain vulnerable to jailbreaking attacks where adv
    XAI_API_KEY=your_xai_key
    ```
 
+### Provider Routing
+
+AutoAdv uses a provider factory to route each model key to the correct backend. The provider is determined by the model configuration in `config.py`, not by the Python SDK class name (`SDK != provider` — the `openai-python` library is used for OpenAI, Together, and xAI backends).
+
+**Paper target models:**
+
+| Model key | Provider | Endpoint | API key env | Serverless |
+|-----------|----------|----------|-------------|------------|
+| `llama3-8b` | Together | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` | No (requires dedicated endpoint) |
+| `gpt4o-mini` | OpenAI | `https://api.openai.com/v1` | `OPENAI_API_KEY` | Yes |
+| `Qwen3-235b` | Together | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` | No (requires dedicated endpoint) |
+| `Mistral-7B` | Together | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` | No (requires dedicated endpoint) |
+
+**Attacker models:**
+
+| Model key | Provider | Endpoint | API key env | Serverless |
+|-----------|----------|----------|-------------|------------|
+| `grok-3-mini-beta` (default) | xAI | `https://api.x.ai/v1` | `XAI_API_KEY` | Yes |
+| `gpt4o-mini` | OpenAI | `https://api.openai.com/v1` | `OPENAI_API_KEY` | Yes |
+
+**Additional target models** (serverless on Together): `llama3.3-70b`, `llama4-Maverick`, `Mistral-24b`, and others defined in `config.py`.
+
+> **Note:** Several Together-hosted models used in the paper (`llama3-8b`, `Qwen3-235b`, `Mistral-7B`) have since been moved to dedicated endpoints and are no longer available on Together's serverless tier. The default target model is set to `llama3.3-70b`, which is currently available serverless.
+
+**Changing a model's provider:** To point a model at a different provider, update its entry in `config.py`. For example, to add a new provider and re-route a model:
+
+```python
+# 1. Add the provider to PROVIDER_SPECS (if new):
+"fireworks": {
+    "sdk_family": "openai_python",
+    "base_url": "https://api.fireworks.ai/inference/v1",
+    "api_key_env": "FIREWORKS_API_KEY",
+    "compat_mode": "openai_compatible",
+},
+
+# 2. Update the model entry in TARGET_MODELS:
+"llama3-8b": build_model_config(
+    "accounts/fireworks/models/llama-v3p1-8b-instruct",
+    provider="fireworks",
+    request_cost=0.20,
+    response_cost=0.20,
+    token_model="gpt-4o-mini",
+),
+```
+
+At startup, AutoAdv prints the selected provider, SDK, endpoint, and API key env var for both the target and attacker models.
+
 ### Basic Usage
 
 #### Quick Start
 ```bash
-# Default run (llama3-8b target + grok-3-mini-beta attacker)
+# Default run (gpt4o-mini target + grok-3-mini-beta attacker)
 python Code/app.py --sample-size 10
 
 # Use an OpenAI attacker model instead of Grok
-python Code/app.py --target-model llama3-8b --attacker-model gpt4o-mini --sample-size 10
+python Code/app.py --target-model gpt4o-mini --attacker-model gpt4o-mini --sample-size 10
 
 # No-pattern ablation
-python Code/app.py --target-model llama3-8b --no-patterns --sample-size 10
+python Code/app.py --target-model gpt4o-mini --no-patterns --sample-size 10
 ```
 
 #### Advanced Usage
 ```bash
 # Custom attacker/target temperatures and turn limit
-python Code/app.py --target-model llama3-8b --attacker-temp 0.8 --target-temp 0.7 --turns 8
+python Code/app.py --target-model gpt4o-mini --attacker-temp 0.8 --target-temp 0.7 --turns 8
 
 # Disable adaptive temperature learning
-python Code/app.py --target-model llama3-8b --no-temperature-learning --sample-size 50
+python Code/app.py --target-model gpt4o-mini --no-temperature-learning --sample-size 50
 
 # Baseline mode (multi-turn, no pattern learning, no temperature learning)
-python Code/app.py --target-model llama3-8b --baseline-mode --sample-size 50
+python Code/app.py --target-model gpt4o-mini --baseline-mode --sample-size 50
 
 # High-throughput parallel processing
-python Code/app.py --target-model llama3-8b --workers 20 --sample-size 200
+python Code/app.py --target-model gpt4o-mini --workers 20 --sample-size 200
 ```
 
 ### Command-Line Options
@@ -70,7 +117,7 @@ Core options (recommended):
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--target-model` | Target model key to attack | `llama3-8b` |
+| `--target-model` | Target model key to attack | `gpt4o-mini` |
 | `--target-temp` | Temperature for target model | `0.7` |
 | `--attacker-temp` | Temperature for attacker model | `0.7` |
 | `--attacker-model` | Attacker model key for rewriting | `grok-3-mini-beta` |
@@ -97,7 +144,9 @@ AutoAdv/
 │   ├── conversation.py                     # Multi-turn orchestration + logging
 │   ├── attacker_llm.py                     # Attacker-side model interface
 │   ├── target_llm.py                       # Target-side model interface
-│   ├── grok_client.py                      # xAI Grok client wrapper
+│   ├── provider_factory.py                 # Provider-aware client factory + routing metadata
+│   ├── xai_client.py                       # xAI client wrapper built on the provider factory
+│   ├── grok_client.py                      # Backward-compatible alias for older Grok imports
 │   ├── pattern_manager.py                  # Pattern learning and persistence
 │   ├── prompt_enhancer.py                  # Pattern-based system prompt enhancement
 │   ├── temperature_manager.py              # Adaptive temperature strategy logic
@@ -166,7 +215,7 @@ This grading runs automatically during each experiment.
 
 ```bash
 # Main run command (includes AutoAdv's modified StrongREJECT-style grading automatically)
-python Code/app.py --target-model llama3-8b --sample-size 10
+python Code/app.py --target-model gpt4o-mini --sample-size 10
 ```
 
 ### Metrics Tracked
